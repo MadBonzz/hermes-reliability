@@ -1,0 +1,95 @@
+{
+  "id": "scen_07_skill_cache_invalidation",
+  "name": "Scenario 7: Custom SKILL.md Update & Cache Invalidation",
+  "property_tested": "State Consistency (Applying updated skill rules instead of stale turn-1 rules)",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Create a skill file `{WORKSPACE}/SKILL.md` stating: `Rule: Prefix all formatted notes with [DRAFT]`. Confirm once created.",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "SKILL.md",
+          "expected": "[DRAFT]"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "draft",
+            "skill.md",
+            "created"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Update `{WORKSPACE}/SKILL.md` so the rule prefixes notes with `[PUBLISHED-2026]` instead of `[DRAFT]`.",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "SKILL.md",
+          "expected": "[PUBLISHED-2026]"
+        },
+        {
+          "type": "file_not_contains",
+          "path": "SKILL.md",
+          "expected": "[DRAFT]"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "published-2026",
+            "updated"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Read `{WORKSPACE}/SKILL.md` and format the note `Q3 results ready` into `{WORKSPACE}/formatted_note.txt` following the current skill file rule.",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "formatted_note.txt",
+          "expected": "[PUBLISHED-2026] Q3 results ready"
+        },
+        {
+          "type": "file_not_contains",
+          "path": "formatted_note.txt",
+          "expected": "[DRAFT]"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "published-2026"
+          ]
+        }
+      ]
+    }
+  ]
+}

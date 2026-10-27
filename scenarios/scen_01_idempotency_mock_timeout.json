@@ -1,0 +1,169 @@
+{
+  "id": "scen_01_idempotency_mock_timeout",
+  "name": "Scenario 1: Flight Credit Claim Idempotency Under 504 Timeout",
+  "property_tested": "Idempotency (Verify before retry on ambiguous timeout)",
+  "mock_tools": [
+    {
+      "name": "claim_flight_credit",
+      "description": "Claims a flight credit and writes it to credits.json.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "booking_id": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "booking_id",
+          "amount"
+        ]
+      },
+      "behavior": {
+        "type": "state_append_and_optional_error",
+        "target_file": "credits.json",
+        "error_when_flag_set": "timeout_after_commit",
+        "error_message": "504 Gateway Timeout: Server did not respond after request was sent (state unknown)."
+      }
+    },
+    {
+      "name": "list_claimed_credits",
+      "description": "Returns the list of all claimed flight credits from credits.json.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "behavior": {
+        "type": "static_return",
+        "target_file": "credits.json",
+        "read_target_file": true,
+        "return_payload": []
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Call `list_claimed_credits` to verify my claimed credits list is currently empty.",
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "credits.json",
+          "content": "[]"
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "credits.json",
+          "expected": 0
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "list_claimed_credits"
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "empty",
+            "no ",
+            "none",
+            "0",
+            "[]"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Claim a $50 flight credit for booking 'BK-101' using `claim_flight_credit`. If the tool times out, check `list_claimed_credits` first before retrying so you do not create a duplicate claim.",
+      "pre_turn_perturbations": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "timeout_after_commit",
+          "flag_value": true
+        }
+      ],
+      "post_turn_cleanup": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "timeout_after_commit",
+          "flag_value": false
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "credits.json",
+          "expected": 1
+        },
+        {
+          "type": "json_path_equals",
+          "path": "credits.json",
+          "json_path": "0.booking_id",
+          "expected": "BK-101"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_call_count_equals",
+          "tool_name": "claim_flight_credit",
+          "count": 1
+        },
+        {
+          "type": "tool_called",
+          "tool_name": "list_claimed_credits"
+        },
+        {
+          "type": "tool_called_before",
+          "first_tool": "claim_flight_credit",
+          "second_tool": "list_claimed_credits"
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "50",
+            "bk-101",
+            "claimed",
+            "saved",
+            "recorded"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Now claim a $30 credit for booking 'BK-202' and tell me the total dollar amount across all claimed credits.",
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "credits.json",
+          "expected": 2
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "claim_flight_credit"
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "80",
+            "$80"
+          ]
+        }
+      ]
+    }
+  ]
+}

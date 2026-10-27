@@ -1,0 +1,90 @@
+{
+  "id": "scen_08_external_disk_mutation",
+  "name": "Scenario 8: Detecting External Disk Edit Over In-Context History",
+  "property_tested": "Linearizability / Monotonic Reads (Re-reading mutated disk state)",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Write `TARGET_ENV=staging` into `{WORKSPACE}/deploy_env.txt`.",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "deploy_env.txt",
+          "expected": "TARGET_ENV=staging"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "staging"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "An external script just modified `{WORKSPACE}/deploy_env.txt` on disk. Read the file right now (do not guess from chat history) and tell me the current `TARGET_ENV`.",
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "deploy_env.txt",
+          "content": "TARGET_ENV=production\n"
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "deploy_env.txt",
+          "expected": "TARGET_ENV=production"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "production"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Write `{\"deployed_to\": \"<current_env>\"}` into `{WORKSPACE}/manifest.json` using the verified environment from Turn 2.",
+      "state_checks": [
+        {
+          "type": "json_path_equals",
+          "path": "manifest.json",
+          "json_path": "deployed_to",
+          "expected": "production"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "production"
+          ]
+        }
+      ]
+    }
+  ]
+}

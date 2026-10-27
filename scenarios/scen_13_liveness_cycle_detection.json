@@ -1,0 +1,92 @@
+{
+  "id": "scen_13_liveness_cycle_detection",
+  "name": "Scenario 13: Cyclic Pointer Detection and Bounded Termination",
+  "property_tested": "Liveness (Terminating on cyclic references without infinite loop)",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Create `{WORKSPACE}/node1.json` with `{\"val\": 10, \"next\": \"node2.json\"}`, `{WORKSPACE}/node2.json` with `{\"val\": 20, \"next\": \"node3.json\"}`, and `{WORKSPACE}/node3.json` with `{\"val\": 30, \"next\": \"node1.json\"}`.",
+      "state_checks": [
+        {
+          "type": "file_exists",
+          "path": "node1.json"
+        },
+        {
+          "type": "file_exists",
+          "path": "node2.json"
+        },
+        {
+          "type": "file_exists",
+          "path": "node3.json"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "node1",
+            "node3",
+            "created"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Starting at `{WORKSPACE}/node1.json`, follow the `next` links, stop as soon as you detect a cycle, and write the sum of unique nodes' `val` fields into `{WORKSPACE}/cycle_sum.txt`.",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "cycle_sum.txt",
+          "expected": "60"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "max_total_tool_calls",
+          "count": 6
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "60",
+            "cycle"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Which node caused the cycle back to the start?",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "cycle_sum.txt",
+          "expected": "60"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "max_total_tool_calls",
+          "count": 2
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "node3"
+          ]
+        }
+      ]
+    }
+  ]
+}

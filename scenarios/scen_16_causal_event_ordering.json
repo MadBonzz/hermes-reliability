@@ -1,0 +1,91 @@
+{
+  "id": "scen_16_causal_event_ordering",
+  "name": "Scenario 16: Reconciling Out-of-Order Webhook Stream by Timestamp",
+  "property_tested": "Causal / Chronological Ordering",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Create `{WORKSPACE}/events.json` with this exact array order: `[{\"ts\": \"2026-10-16T15:00:00Z\", \"state\": \"DELIVERED\"}, {\"ts\": \"2026-10-16T09:00:00Z\", \"state\": \"CREATED\"}, {\"ts\": \"2026-10-16T12:00:00Z\", \"state\": \"IN_TRANSIT\"}]`.",
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "events.json",
+          "expected": 3
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "events.json",
+            "created"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Read `{WORKSPACE}/events.json`, determine the latest state by chronological timestamp `ts` (not array position), and write ONLY that latest state string into `{WORKSPACE}/latest_state.txt`.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "latest_state.txt",
+          "expected": [
+            "DELIVERED"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "delivered"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Write the three states sorted chronologically from earliest to latest (one per line) into `{WORKSPACE}/ordered_timeline.txt`.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "ordered_timeline.txt",
+          "expected": [
+            "CREATED",
+            "IN_TRANSIT",
+            "DELIVERED"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_all",
+          "values": [
+            "created",
+            "in_transit",
+            "delivered"
+          ]
+        }
+      ]
+    }
+  ]
+}

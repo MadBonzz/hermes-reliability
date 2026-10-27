@@ -1,0 +1,105 @@
+{
+  "id": "scen_18_corrupted_state_repair",
+  "name": "Scenario 18: Graceful Detection and Repair of Truncated JSON State",
+  "property_tested": "Fault Recovery (Repairing corrupted state without data loss)",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Create `{WORKSPACE}/config.json` with valid JSON: `{\"host\": \"localhost\", \"port\": 8080}`.",
+      "state_checks": [
+        {
+          "type": "json_valid",
+          "path": "config.json"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "8080",
+            "localhost"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "A crash truncated `{WORKSPACE}/config.json`. Read it, repair the broken JSON syntax while keeping `host: localhost` and `port: 8080`, and add `\"recovered\": true`.",
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "config.json",
+          "content": "{\"host\": \"localhost\", \"port\": 808"
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "json_valid",
+          "path": "config.json"
+        },
+        {
+          "type": "json_path_equals",
+          "path": "config.json",
+          "json_path": "port",
+          "expected": 8080
+        },
+        {
+          "type": "json_path_equals",
+          "path": "config.json",
+          "json_path": "recovered",
+          "expected": true
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "repaired",
+            "recovered",
+            "8080",
+            "valid"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Read `{WORKSPACE}/config.json` and confirm all three keys are present.",
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "config.json",
+          "expected": 3
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 0
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_all",
+          "values": [
+            "host",
+            "port",
+            "recovered"
+          ]
+        }
+      ]
+    }
+  ]
+}

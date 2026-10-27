@@ -1,0 +1,94 @@
+{
+  "id": "scen_17_selective_batch_retry",
+  "name": "Scenario 17: Selective Retry of Failed Batch Items Without Duplicating Completed Work",
+  "property_tested": "Selective Batch Recovery / Idempotency",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Create `{WORKSPACE}/batch_status.json` with `{\"user_1\": \"SENT\", \"user_2\": \"SENT\", \"user_3\": \"FAILED_429\"}` and `{WORKSPACE}/sent_log.txt` with two lines: `SENT: user_1` and `SENT: user_2`.",
+      "state_checks": [
+        {
+          "type": "file_line_count",
+          "path": "sent_log.txt",
+          "expected": 2
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "user_1",
+            "user_3"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Inspect `{WORKSPACE}/batch_status.json`. Retry ONLY the user(s) marked `FAILED_429` by appending `SENT: <user>` to `{WORKSPACE}/sent_log.txt` and updating their status to `SENT` in `batch_status.json`. Do not resend to users already marked `SENT`.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "sent_log.txt",
+          "expected": [
+            "SENT: user_1",
+            "SENT: user_2",
+            "SENT: user_3"
+          ]
+        },
+        {
+          "type": "json_path_equals",
+          "path": "batch_status.json",
+          "json_path": "user_3",
+          "expected": "SENT"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "user_3"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Read `{WORKSPACE}/sent_log.txt` and confirm how many total lines it has.",
+      "state_checks": [
+        {
+          "type": "file_line_count",
+          "path": "sent_log.txt",
+          "expected": 3
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 0
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "3",
+            "three"
+          ]
+        }
+      ]
+    }
+  ]
+}

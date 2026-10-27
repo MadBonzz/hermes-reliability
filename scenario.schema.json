@@ -1,0 +1,762 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HermesMultiTurnEvalScenario",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "property_tested",
+    "turns"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "property_tested": {
+      "type": "string"
+    },
+    "mock_tools": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "parameters",
+          "behavior"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "behavior": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "state_append_and_optional_error",
+                  "state_kv_write_and_optional_error",
+                  "unverified_race_deduct",
+                  "static_return"
+                ]
+              },
+              "target_file": {
+                "type": "string"
+              },
+              "delay_ms": {
+                "type": "integer",
+                "default": 0,
+                "minimum": 0
+              },
+              "return_payload": {},
+              "error_when_flag_set": {
+                "type": "string"
+              },
+              "error_message": {
+                "type": "string"
+              },
+              "fail_before_write": {
+                "type": "boolean",
+                "default": false
+              },
+              "clear_flag_after_first_error": {
+                "type": "boolean",
+                "default": false
+              },
+              "read_target_file": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "turns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "turn_number",
+          "prompt",
+          "state_checks",
+          "process_checks",
+          "output_checks"
+        ],
+        "properties": {
+          "turn_number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pre_turn_perturbations": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "write_file",
+                    "append_file",
+                    "delete_file",
+                    "chmod",
+                    "mkdir",
+                    "set_fault_flag",
+                    "compress_context",
+                    "truncate_history"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "flag_name": {
+                  "type": "string"
+                },
+                "flag_value": {
+                  "type": "boolean"
+                },
+                "keep_last_n_messages": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "use_native_compressor": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "write_file"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "content"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "append_file"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "content"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "delete_file"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "chmod"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "mode"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "mkdir"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "set_fault_flag"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "flag_name"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "post_turn_cleanup": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "chmod",
+                    "set_fault_flag"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "flag_name": {
+                  "type": "string"
+                },
+                "flag_value": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "chmod"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "mode"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "set_fault_flag"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "flag_name"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "state_checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "file_exists",
+                    "file_not_exists",
+                    "file_contains",
+                    "file_not_contains",
+                    "file_exact_lines",
+                    "file_line_count",
+                    "file_substring_count",
+                    "json_path_equals",
+                    "json_valid",
+                    "json_key_count"
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "json_path": {
+                  "type": "string"
+                },
+                "substring": {
+                  "type": "string"
+                },
+                "expected": {}
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_exists"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_not_exists"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_contains"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_not_contains"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_exact_lines"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_line_count"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_substring_count"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "substring",
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "json_path_equals"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "json_path",
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "json_valid"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "json_key_count"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "process_checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "min_total_tool_calls",
+                    "max_total_tool_calls",
+                    "tool_called",
+                    "tool_not_called",
+                    "any_tool_called",
+                    "tool_call_count_equals",
+                    "tool_called_before",
+                    "arguments_not_contain"
+                  ]
+                },
+                "tool_name": {
+                  "type": "string"
+                },
+                "first_tool": {
+                  "type": "string"
+                },
+                "second_tool": {
+                  "type": "string"
+                },
+                "tool_names": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "forbidden_substring": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "min_total_tool_calls"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "count"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "max_total_tool_calls"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "count"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "tool_called"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "tool_name"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "tool_not_called"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "tool_name"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "any_tool_called"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "tool_names"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "tool_call_count_equals"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "tool_name",
+                      "count"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "tool_called_before"
+                      }
+                    }
+                  },
+                  "then": {
+                    "description": "Require a first_tool call followed by a second_tool call at a later position; earlier preflight calls are allowed.",
+                    "required": [
+                      "first_tool",
+                      "second_tool"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "arguments_not_contain"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "forbidden_substring"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "output_checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "contains_any",
+                    "contains_all",
+                    "not_contains",
+                    "regex_match"
+                  ]
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "pattern": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "contains_any"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "values"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "contains_all"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "values"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "not_contains"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "values"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "regex_match"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "pattern"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false
+}

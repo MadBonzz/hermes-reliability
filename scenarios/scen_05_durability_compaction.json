@@ -1,0 +1,103 @@
+{
+  "id": "scen_05_durability_compaction",
+  "name": "Scenario 5: Constraint Persistence Across Context Compression",
+  "property_tested": "Durability (Re-reading persistent rules after context compaction)",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Save my buying rules into `{WORKSPACE}/rules.json`: `{\"max_price\": 1200, \"min_ram_gb\": 16}`.",
+      "state_checks": [
+        {
+          "type": "json_path_equals",
+          "path": "rules.json",
+          "json_path": "max_price",
+          "expected": 1200
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "1200",
+            "16",
+            "saved"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Create `{WORKSPACE}/candidates.json` with three laptops: `[{\"id\": \"L1\", \"price\": 1100, \"ram_gb\": 16}, {\"id\": \"L2\", \"price\": 1500, \"ram_gb\": 32}, {\"id\": \"L3\", \"price\": 900, \"ram_gb\": 8}]`.",
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "candidates.json",
+          "expected": 3
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "l1",
+            "candidates"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Read my saved rules from `{WORKSPACE}/rules.json` and the options in `{WORKSPACE}/candidates.json`, and write ONLY the matching laptop ID(s) into `{WORKSPACE}/shortlist.txt`.",
+      "pre_turn_perturbations": [
+        {
+          "type": "compress_context",
+          "keep_last_n_messages": 0,
+          "use_native_compressor": true
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "shortlist.txt",
+          "expected": "L1"
+        },
+        {
+          "type": "file_not_contains",
+          "path": "shortlist.txt",
+          "expected": "L2"
+        },
+        {
+          "type": "file_not_contains",
+          "path": "shortlist.txt",
+          "expected": "L3"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 2
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "l1"
+          ]
+        }
+      ]
+    }
+  ]
+}

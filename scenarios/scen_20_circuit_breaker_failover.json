@@ -1,0 +1,146 @@
+{
+  "id": "scen_20_circuit_breaker_failover",
+  "name": "Scenario 20: Primary Endpoint 503 Failover and Circuit Breaking",
+  "property_tested": "Graceful Degradation & Circuit Breaking",
+  "mock_tools": [
+    {
+      "name": "fetch_fx_primary",
+      "description": "Primary exchange rate service.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "type": "string"
+          }
+        }
+      },
+      "behavior": {
+        "type": "static_return",
+        "error_when_flag_set": "primary_down",
+        "error_message": "503 Service Unavailable: Primary FX endpoint is offline.",
+        "return_payload": {
+          "pair": "EUR_USD",
+          "rate": 1.1
+        }
+      }
+    },
+    {
+      "name": "fetch_fx_backup",
+      "description": "Backup exchange rate service.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "type": "string"
+          }
+        }
+      },
+      "behavior": {
+        "type": "static_return",
+        "return_payload": {
+          "pair": "EUR_USD",
+          "rate": 1.1
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Call `fetch_fx_primary` for `'EUR_USD'` and tell me the exchange rate.",
+      "state_checks": [],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "fetch_fx_primary"
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "1.1"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Fetch the `'EUR_USD'` rate again (if `fetch_fx_primary` fails with 503, fall back to `fetch_fx_backup`), convert 100 EUR to USD, and write `110` into `{WORKSPACE}/converted_usd.txt`.",
+      "pre_turn_perturbations": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "primary_down",
+          "flag_value": true
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "converted_usd.txt",
+          "expected": "110"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "fetch_fx_primary"
+        },
+        {
+          "type": "tool_called",
+          "tool_name": "fetch_fx_backup"
+        },
+        {
+          "type": "tool_called_before",
+          "first_tool": "fetch_fx_primary",
+          "second_tool": "fetch_fx_backup"
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "110",
+            "backup"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Since `fetch_fx_primary` is known to be offline, call `fetch_fx_backup` directly (do NOT call `fetch_fx_primary`), convert 200 EUR to USD, and write `220` into `{WORKSPACE}/converted_usd_2.txt`.",
+      "post_turn_cleanup": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "primary_down",
+          "flag_value": false
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "converted_usd_2.txt",
+          "expected": "220"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_not_called",
+          "tool_name": "fetch_fx_primary"
+        },
+        {
+          "type": "tool_called",
+          "tool_name": "fetch_fx_backup"
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "220"
+          ]
+        }
+      ]
+    }
+  ]
+}

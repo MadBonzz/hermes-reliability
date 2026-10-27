@@ -1,0 +1,98 @@
+{
+  "id": "scen_04_isolation_dirty_read",
+  "name": "Scenario 4: Invoice Reconciliation \u2014 Preventing Dirty Read of Rejected Drafts",
+  "property_tested": "Read Isolation (Excluding unverified/rejected records)",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Create `{WORKSPACE}/invoices.json` containing `[{\"id\": 1, \"amount\": 100, \"status\": \"VERIFIED\"}, {\"id\": 2, \"amount\": 250, \"status\": \"PENDING_AUDIT\"}, {\"id\": 3, \"amount\": 150, \"status\": \"VERIFIED\"}]`.",
+      "state_checks": [
+        {
+          "type": "json_key_count",
+          "path": "invoices.json",
+          "expected": 3
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "invoices.json",
+            "created",
+            "250"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Read `{WORKSPACE}/audit_result.json` to update the status of invoice 2 in `{WORKSPACE}/invoices.json`, and then write ONLY the numeric sum of `VERIFIED` invoices into `{WORKSPACE}/payout.txt`.",
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "audit_result.json",
+          "content": "{\"id\": 2, \"new_status\": \"REJECTED\"}"
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "payout.txt",
+          "expected": "250"
+        },
+        {
+          "type": "file_not_contains",
+          "path": "payout.txt",
+          "expected": "500"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 2
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_any",
+          "values": [
+            "250",
+            "rejected"
+          ]
+        }
+      ]
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Read `{WORKSPACE}/payout.txt` and tell me which invoice ID was excluded and why.",
+      "state_checks": [
+        {
+          "type": "file_contains",
+          "path": "payout.txt",
+          "expected": "250"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 0
+        }
+      ],
+      "output_checks": [
+        {
+          "type": "contains_all",
+          "values": [
+            "2",
+            "reject"
+          ]
+        }
+      ]
+    }
+  ]
+}
