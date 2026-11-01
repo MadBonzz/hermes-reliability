@@ -1,93 +1,76 @@
 {
   "id": "scen_06_cron_dedup",
-  "name": "Scenario 6: Scheduled Automation Deduplication on Schedule Update",
-  "property_tested": "Idempotency (Updating schedule in-place without duplicate jobs)",
+  "name": "Reschedule an existing daily briefing",
+  "property_tested": "In-place schedule update; repeat-request idempotency",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Create `{WORKSPACE}/cron_jobs.json` containing `[{\"job_name\": \"morning_brief\", \"cron\": \"0 8 * * *\"}]`.",
+      "prompt": "Move my daily morning_brief to 09:00. The scheduler reads the five-field cron entries in {WORKSPACE}/cron_jobs.json, in local time. Keep the other jobs as they are.",
       "state_checks": [
         {
-          "type": "json_key_count",
+          "type": "json_array_unordered",
           "path": "cron_jobs.json",
-          "expected": 1
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "morning_brief",
-            "0 8"
+          "expected": [
+            {
+              "job_name": "morning_brief",
+              "cron": "0 9 * * *"
+            },
+            {
+              "job_name": "backup",
+              "cron": "0 2 * * *"
+            }
           ]
         }
-      ]
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "cron_jobs.json",
+          "content": "[\n  {\n    \"job_name\": \"morning_brief\",\n    \"cron\": \"0 8 * * *\"\n  },\n  {\n    \"job_name\": \"backup\",\n    \"cron\": \"0 2 * * *\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/cron_jobs.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/cron_jobs.json",
+              "content": "[\n  {\n    \"job_name\": \"morning_brief\",\n    \"cron\": \"0 9 * * *\"\n  },\n  {\n    \"job_name\": \"backup\",\n    \"cron\": \"0 2 * * *\"\n  }\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 2,
-      "prompt": "My last command glitched when I tried to reschedule `morning_brief` to `0 9 * * *`. Check `{WORKSPACE}/cron_jobs.json` and make sure `morning_brief` is set to `0 9 * * *` and appears ONLY ONCE in the JSON array.",
+      "prompt": "I lost the confirmation. Please make sure my morning briefing is scheduled for 09:00 daily.",
       "state_checks": [
         {
-          "type": "json_key_count",
+          "type": "json_array_unordered",
           "path": "cron_jobs.json",
-          "expected": 1
-        },
-        {
-          "type": "json_path_equals",
-          "path": "cron_jobs.json",
-          "json_path": "0.cron",
-          "expected": "0 9 * * *"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "0 9",
-            "9",
-            "updated"
+          "expected": [
+            {
+              "job_name": "morning_brief",
+              "cron": "0 9 * * *"
+            },
+            {
+              "job_name": "backup",
+              "cron": "0 2 * * *"
+            }
           ]
         }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Read `{WORKSPACE}/cron_jobs.json` and confirm how many total jobs exist.",
-      "state_checks": [
-        {
-          "type": "json_key_count",
-          "path": "cron_jobs.json",
-          "expected": 1
-        }
       ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 0
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "1",
-            "one",
-            "single"
-          ]
-        }
-      ]
+      "process_checks": [],
+      "output_checks": []
     }
   ]
 }

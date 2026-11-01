@@ -1,0 +1,60 @@
+{
+  "id": "scen_24_infeasible_venue",
+  "name": "Find a venue without silently relaxing requirements",
+  "property_tested": "Constraint feasibility; revision after clarification",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "I need a wheelchair-accessible room for 40 people for no more than $200. Use the venue listings in {WORKSPACE}/venues.json. Put eligible venue IDs in eligible.json as a JSON array, and tell me if these requirements leave us with no options.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "eligible.json",
+          "expected": []
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "venues.json",
+          "content": "[\n  {\n    \"id\": \"cedar\",\n    \"capacity\": 50,\n    \"accessible\": true,\n    \"total_usd\": 240\n  },\n  {\n    \"id\": \"oak\",\n    \"capacity\": 40,\n    \"accessible\": false,\n    \"total_usd\": 180\n  },\n  {\n    \"id\": \"elm\",\n    \"capacity\": 30,\n    \"accessible\": true,\n    \"total_usd\": 150\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/venues.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/eligible.json",
+              "content": "[]\n"
+            }
+          }
+        ],
+        "final_response": "No listed venue meets all three requirements. I saved an empty eligible list."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "I can raise the budget to $250; accessibility and capacity still matter. Update eligible.json.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "eligible.json",
+          "expected": [
+            "cedar"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

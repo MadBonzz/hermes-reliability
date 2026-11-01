@@ -1,102 +1,101 @@
 {
   "id": "scen_09_partial_source_missing",
-  "name": "Scenario 9: Multi-Source Aggregation with Missing/Failed Shard",
-  "property_tested": "Partial Failure Handling (Aggregating available shards without fabricating missing data)",
+  "name": "Summarize branch totals with an outstanding report",
+  "property_tested": "Partial-source accounting without fabricating missing data",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "In `{WORKSPACE}`, create `branch_a.txt` containing `500` and `branch_b.txt` containing `300`. Do NOT create `branch_c.txt`.",
+      "prompt": "Please total the branch reports for A, B, and C in {WORKSPACE}. Their files are branch_a.txt, branch_b.txt, and branch_c.txt. Save summary.json with verified_sum and missing_files so I can see whether the total is complete.",
       "state_checks": [
         {
-          "type": "file_exists",
-          "path": "branch_a.txt"
+          "type": "json_equals",
+          "path": "summary.json",
+          "json_path": "verified_sum",
+          "expected": 800
         },
         {
-          "type": "file_exists",
-          "path": "branch_b.txt"
+          "type": "json_array_unordered",
+          "path": "summary.json",
+          "json_path": "missing_files",
+          "expected": [
+            "branch_c.txt"
+          ]
         },
         {
           "type": "file_not_exists",
           "path": "branch_c.txt"
         }
       ],
-      "process_checks": [
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
         {
-          "type": "min_total_tool_calls",
-          "count": 1
+          "type": "write_file",
+          "path": "branch_a.txt",
+          "content": "500\n"
+        },
+        {
+          "type": "write_file",
+          "path": "branch_b.txt",
+          "content": "300\n"
         }
       ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "500",
-            "300",
-            "created"
-          ]
-        }
-      ]
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/branch_a.txt"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/branch_b.txt"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/summary.json",
+              "content": "{\n  \"verified_sum\": 800,\n  \"missing_files\": [\n    \"branch_c.txt\"\n  ]\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 2,
-      "prompt": "Try to read `branch_a.txt`, `branch_b.txt`, and `branch_c.txt` in `{WORKSPACE}`. Write `{WORKSPACE}/summary.json` with `{\"verified_sum\": <sum_of_existing>, \"missing_files\": [<missing_filenames>]}`.",
+      "prompt": "Branch C's report has arrived. Please refresh the summary.",
       "state_checks": [
         {
-          "type": "json_path_equals",
-          "path": "summary.json",
-          "json_path": "verified_sum",
-          "expected": 800
-        },
-        {
-          "type": "file_contains",
-          "path": "summary.json",
-          "expected": "branch_c.txt"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 2
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_all",
-          "values": [
-            "800",
-            "branch_c.txt"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Now create `{WORKSPACE}/branch_c.txt` containing `200` and update `{WORKSPACE}/summary.json` so `verified_sum` is `1000` and `missing_files` is `[]`.",
-      "state_checks": [
-        {
-          "type": "json_path_equals",
+          "type": "json_equals",
           "path": "summary.json",
           "json_path": "verified_sum",
           "expected": 1000
         },
         {
-          "type": "json_key_count",
+          "type": "json_array_unordered",
           "path": "summary.json",
-          "expected": 2
-        }
-      ],
-      "process_checks": [
+          "json_path": "missing_files",
+          "expected": []
+        },
         {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "1000"
+          "type": "file_exact_lines",
+          "path": "branch_c.txt",
+          "expected": [
+            "200"
           ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "branch_c.txt",
+          "content": "200\n"
         }
       ]
     }

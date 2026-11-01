@@ -1,11 +1,11 @@
 {
   "id": "scen_20_circuit_breaker_failover",
-  "name": "Scenario 20: Primary Endpoint 503 Failover and Circuit Breaking",
-  "property_tested": "Graceful Degradation & Circuit Breaking",
+  "name": "Convert travel expenses while a rate feed is unavailable",
+  "property_tested": "Service failover and reuse of outage knowledge",
   "mock_tools": [
     {
       "name": "fetch_fx_primary",
-      "description": "Primary exchange rate service.",
+      "description": "Preferred EUR_USD exchange-rate feed. A 503 indicates it is unavailable for the rest of this session.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -26,7 +26,7 @@
     },
     {
       "name": "fetch_fx_backup",
-      "description": "Backup exchange rate service.",
+      "description": "Backup EUR_USD feed with the same rate definition and freshness as the primary.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -47,26 +47,75 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Call `fetch_fx_primary` for `'EUR_USD'` and tell me the exchange rate.",
-      "state_checks": [],
+      "prompt": "Please get the current EUR_USD rate from our rate service and save pair and rate in {WORKSPACE}/exchange_rate.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "exchange_rate.json",
+          "json_path": "pair",
+          "expected": "EUR_USD"
+        },
+        {
+          "type": "json_equals",
+          "path": "exchange_rate.json",
+          "json_path": "rate",
+          "expected": 1.1
+        }
+      ],
       "process_checks": [
         {
           "type": "tool_called",
           "tool_name": "fetch_fx_primary"
         }
       ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "1.1"
-          ]
-        }
-      ]
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "fetch_fx_primary",
+            "arguments": {
+              "pair": "EUR_USD"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/exchange_rate.json",
+              "content": "{\n  \"pair\": \"EUR_USD\",\n  \"rate\": 1.1\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 2,
-      "prompt": "Fetch the `'EUR_USD'` rate again (if `fetch_fx_primary` fails with 503, fall back to `fetch_fx_backup`), convert 100 EUR to USD, and write `110` into `{WORKSPACE}/converted_usd.txt`.",
+      "prompt": "Convert a 100 EUR travel expense at the current rate. Save amount_usd and rate in expense_1.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "expense_1.json",
+          "json_path": "amount_usd",
+          "expected": 110
+        },
+        {
+          "type": "json_equals",
+          "path": "expense_1.json",
+          "json_path": "rate",
+          "expected": 1.1
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "fetch_fx_primary"
+        },
+        {
+          "type": "tool_called",
+          "tool_name": "fetch_fx_backup"
+        }
+      ],
+      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "set_fault_flag",
@@ -74,73 +123,65 @@
           "flag_value": true
         }
       ],
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "converted_usd.txt",
-          "expected": "110"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "tool_called",
-          "tool_name": "fetch_fx_primary"
-        },
-        {
-          "type": "tool_called",
-          "tool_name": "fetch_fx_backup"
-        },
-        {
-          "type": "tool_called_before",
-          "first_tool": "fetch_fx_primary",
-          "second_tool": "fetch_fx_backup"
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "110",
-            "backup"
-          ]
-        }
-      ]
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/exchange_rate.json"
+            }
+          },
+          {
+            "tool": "fetch_fx_primary",
+            "arguments": {
+              "pair": "EUR_USD"
+            }
+          },
+          {
+            "tool": "fetch_fx_backup",
+            "arguments": {
+              "pair": "EUR_USD"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/expense_1.json",
+              "content": "{\n  \"amount_usd\": 110,\n  \"rate\": 1.1\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 3,
-      "prompt": "Since `fetch_fx_primary` is known to be offline, call `fetch_fx_backup` directly (do NOT call `fetch_fx_primary`), convert 200 EUR to USD, and write `220` into `{WORKSPACE}/converted_usd_2.txt`.",
-      "post_turn_cleanup": [
-        {
-          "type": "set_fault_flag",
-          "flag_name": "primary_down",
-          "flag_value": false
-        }
-      ],
+      "prompt": "There's another expense of 200 EUR. Please convert it at the current rate into expense_2.json with the same fields.",
       "state_checks": [
         {
-          "type": "file_contains",
-          "path": "converted_usd_2.txt",
-          "expected": "220"
+          "type": "json_equals",
+          "path": "expense_2.json",
+          "json_path": "amount_usd",
+          "expected": 220
+        },
+        {
+          "type": "json_equals",
+          "path": "expense_2.json",
+          "json_path": "rate",
+          "expected": 1.1
         }
       ],
       "process_checks": [
         {
-          "type": "tool_not_called",
-          "tool_name": "fetch_fx_primary"
-        },
-        {
           "type": "tool_called",
           "tool_name": "fetch_fx_backup"
+        },
+        {
+          "type": "tool_not_called",
+          "tool_name": "fetch_fx_primary"
         }
       ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "220"
-          ]
-        }
-      ]
+      "output_checks": []
     }
   ]
 }

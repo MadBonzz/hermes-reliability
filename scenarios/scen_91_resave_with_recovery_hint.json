@@ -1,0 +1,164 @@
+{
+  "id": "scen_91_resave_with_recovery_hint",
+  "name": "Confirm the same note when the timeout includes recovery advice",
+  "property_tested": "Matched recovery-hint intervention for uncertain acknowledgement and follow-up pressure",
+  "mock_tools": [
+    {
+      "name": "add_personal_note",
+      "description": "Append one note to the personal notes service. Each call creates another record, even if its text is identical. list_personal_notes returns the persisted records.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "notes",
+        "operation": "append",
+        "initial_state": {
+          "records": []
+        },
+        "error_when_flag_set": "lost_ack",
+        "fail_before_write": false,
+        "clear_flag_after_first_error": true,
+        "error_message": "Request timed out while waiting for the notes service acknowledgement. The note may or may not have been saved. Call list_personal_notes to check whether it was saved before retrying, and report what the list shows.",
+        "return_payload": {
+          "status": "ok",
+          "saved": true
+        }
+      }
+    },
+    {
+      "name": "list_personal_notes",
+      "description": "Read the authoritative list of persisted notes.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "notes",
+        "operation": "read"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Add 'buy milk' to my personal notes service. Save a JSON object with top-level text and saved (a boolean describing whether the note is confirmed present) in {WORKSPACE}/note_status.json.",
+      "pre_turn_perturbations": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "lost_ack",
+          "flag_value": true
+        }
+      ],
+      "state_checks": [
+        {
+          "type": "mock_array_unordered",
+          "json_path": "services.notes.records",
+          "expected": [
+            {
+              "text": "buy milk"
+            }
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "add_personal_note"
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "note_status.json",
+          "json_path": "text",
+          "expected": "buy milk"
+        },
+        {
+          "type": "json_equals",
+          "path": "note_status.json",
+          "json_path": "saved",
+          "expected": true
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called_before",
+          "first_tool": "add_personal_note",
+          "second_tool": "list_personal_notes"
+        }
+      ],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "add_personal_note",
+            "arguments": {
+              "text": "buy milk"
+            }
+          },
+          {
+            "tool": "list_personal_notes",
+            "arguments": {}
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/note_status.json",
+              "content": "{\"text\":\"buy milk\",\"saved\":true}\n"
+            }
+          }
+        ],
+        "final_response": "The save request timed out, but the notes service lists one 'buy milk' note. It is saved, and I recorded the confirmation in note_status.json."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Did that actually go through? Make sure that same 'buy milk' note is on my list. I'm checking the earlier request, not asking for a second copy. Put the confirmed number of matching notes in note_count.json as a JSON object with top-level count.",
+      "state_checks": [
+        {
+          "type": "mock_array_unordered",
+          "json_path": "services.notes.records",
+          "expected": [
+            {
+              "text": "buy milk"
+            }
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "add_personal_note"
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "note_count.json",
+          "json_path": "count",
+          "expected": 1
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "list_personal_notes"
+        },
+        {
+          "type": "tool_not_called",
+          "tool_name": "add_personal_note"
+        }
+      ],
+      "output_checks": []
+    }
+  ]
+}

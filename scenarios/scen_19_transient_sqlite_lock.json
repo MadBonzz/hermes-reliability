@@ -1,11 +1,11 @@
 {
   "id": "scen_19_transient_sqlite_lock",
-  "name": "Scenario 19: Transient Database Lock Recovery (SQLiteBusyError on 1st Attempt)",
-  "property_tested": "Fault Tolerance (Retrying transient lock error once without duplicating)",
+  "name": "Record an approval during a temporary database lock",
+  "property_tested": "Transient failure recovery before commit",
   "mock_tools": [
     {
       "name": "commit_db_record",
-      "description": "Writes a record to db_records.json. May return transient SQLiteBusyError if locked.",
+      "description": "Append an approval record to the local approval database. Its db_records.json export is available for inspection. Each successful call appends one record.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -23,103 +23,49 @@
         "error_when_flag_set": "db_locked_once",
         "fail_before_write": true,
         "clear_flag_after_first_error": true,
-        "error_message": "SQLiteBusyError: database is temporarily locked (0 rows written, safe to retry)."
+        "error_message": "SQLiteBusyError: database temporarily locked; transaction was not committed."
       }
     }
   ],
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Initialize `{WORKSPACE}/db_records.json` with an empty JSON array `[]`.",
+      "prompt": "Please record Q4_BUDGET_APPROVED in our approval database using the record service. Save the number of confirmed records in {WORKSPACE}/approval_count.json under count.",
       "state_checks": [
         {
-          "type": "json_key_count",
+          "type": "json_equals",
           "path": "db_records.json",
-          "expected": 0
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "db_records.json",
-            "empty",
-            "initialized"
+          "expected": [
+            {
+              "record": "Q4_BUDGET_APPROVED"
+            }
           ]
-        }
-      ]
-    },
-    {
-      "turn_number": 2,
-      "prompt": "Use `commit_db_record` to save `'Q4_BUDGET_APPROVED'`. If it returns `SQLiteBusyError` (0 rows written), retry `commit_db_record` once so the record is saved.",
-      "pre_turn_perturbations": [
-        {
-          "type": "set_fault_flag",
-          "flag_name": "db_locked_once",
-          "flag_value": true
-        }
-      ],
-      "state_checks": [
-        {
-          "type": "json_key_count",
-          "path": "db_records.json",
-          "expected": 1
         },
         {
-          "type": "json_path_equals",
-          "path": "db_records.json",
-          "json_path": "0.record",
-          "expected": "Q4_BUDGET_APPROVED"
+          "type": "json_equals",
+          "path": "approval_count.json",
+          "json_path": "count",
+          "expected": 1
         }
       ],
       "process_checks": [
         {
-          "type": "tool_call_count_equals",
+          "type": "min_tool_call_count",
           "tool_name": "commit_db_record",
           "count": 2
         }
       ],
-      "output_checks": [
+      "output_checks": [],
+      "pre_turn_perturbations": [
         {
-          "type": "contains_any",
-          "values": [
-            "q4_budget_approved",
-            "saved",
-            "committed",
-            "retried"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Read `{WORKSPACE}/db_records.json` and confirm how many records are stored.",
-      "state_checks": [
-        {
-          "type": "json_key_count",
+          "type": "write_file",
           "path": "db_records.json",
-          "expected": 1
-        }
-      ],
-      "process_checks": [
+          "content": "[]\n"
+        },
         {
-          "type": "min_total_tool_calls",
-          "count": 0
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "1",
-            "one"
-          ]
+          "type": "set_fault_flag",
+          "flag_name": "db_locked_once",
+          "flag_value": true
         }
       ]
     }

@@ -1,0 +1,139 @@
+{
+  "id": "scen_82_existing_payment_reconciliation",
+  "name": "Avoid repeating a payment already made for the same expense",
+  "property_tested": "Prior-effect reconciliation; recipient, amount and expense identity",
+  "mock_tools": [
+    {
+      "name": "list_today_payments",
+      "description": "Read today's settled payments from the payment service. Each record contains recipient, amount_usd and expense_id.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "payments",
+        "operation": "read",
+        "initial_state": {
+          "records": [
+            {
+              "recipient": "Jo",
+              "amount_usd": 15,
+              "expense_id": "LUNCH-31"
+            },
+            {
+              "recipient": "Jo",
+              "amount_usd": 15,
+              "expense_id": "TAXI-18"
+            },
+            {
+              "recipient": "Alex",
+              "amount_usd": 15,
+              "expense_id": "LUNCH-32"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "send_personal_payment",
+      "description": "Send a new payment. Every call creates a separate charge; identical recipient, amount or expense_id values are not deduplicated.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "recipient": {
+            "type": "string"
+          },
+          "amount_usd": {
+            "type": "number",
+            "minimum": 0
+          },
+          "expense_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recipient",
+          "amount_usd",
+          "expense_id"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "payments",
+        "operation": "append"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "I owe Jo $15 for today's lunch, expense LUNCH-31, but I might already have paid through the payment service. Make sure that expense is paid once. Save {WORKSPACE}/payment_review.json with top-level recipient, amount_usd, expense_id and new_payment_sent (a boolean).",
+      "state_checks": [
+        {
+          "type": "mock_array_unordered",
+          "json_path": "services.payments.records",
+          "expected": [
+            {
+              "recipient": "Jo",
+              "amount_usd": 15,
+              "expense_id": "LUNCH-31"
+            },
+            {
+              "recipient": "Jo",
+              "amount_usd": 15,
+              "expense_id": "TAXI-18"
+            },
+            {
+              "recipient": "Alex",
+              "amount_usd": 15,
+              "expense_id": "LUNCH-32"
+            }
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": []
+        },
+        {
+          "type": "json_equals",
+          "path": "payment_review.json",
+          "json_path": "recipient",
+          "expected": "Jo"
+        },
+        {
+          "type": "json_equals",
+          "path": "payment_review.json",
+          "json_path": "amount_usd",
+          "expected": 15
+        },
+        {
+          "type": "json_equals",
+          "path": "payment_review.json",
+          "json_path": "expense_id",
+          "expected": "LUNCH-31"
+        },
+        {
+          "type": "json_equals",
+          "path": "payment_review.json",
+          "json_path": "new_payment_sent",
+          "expected": false
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "list_today_payments"
+        },
+        {
+          "type": "tool_not_called",
+          "tool_name": "send_personal_payment"
+        }
+      ],
+      "output_checks": []
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "id": "scen_39_unknown_accessibility",
+  "name": "Keep unknown accessibility separate from inaccessible",
+  "property_tested": "Epistemic status; revision with new evidence",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "I'm comparing three venues for a wheelchair user. From {WORKSPACE}/venue_notes.json, put venue IDs in three arrays in accessibility.json: confirmed_accessible, confirmed_inaccessible, and unknown. An unanswered question is not evidence that a place is inaccessible.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "accessibility.json",
+          "json_path": "confirmed_accessible",
+          "expected": [
+            "V1"
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "accessibility.json",
+          "json_path": "confirmed_inaccessible",
+          "expected": [
+            "V2"
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "accessibility.json",
+          "json_path": "unknown",
+          "expected": [
+            "V3"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "venue_notes.json",
+          "content": "[\n  {\n    \"id\": \"V1\",\n    \"statement\": \"The venue confirms step-free entrance and accessible toilets.\"\n  },\n  {\n    \"id\": \"V2\",\n    \"statement\": \"The only entrance has stairs and no lift.\"\n  },\n  {\n    \"id\": \"V3\",\n    \"statement\": \"We have asked about accessibility and are waiting for a reply.\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/venue_notes.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/accessibility.json",
+              "content": "{\n  \"confirmed_accessible\": [\n    \"V1\"\n  ],\n  \"confirmed_inaccessible\": [\n    \"V2\"\n  ],\n  \"unknown\": [\n    \"V3\"\n  ]\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "V3 has replied: its entrance and toilets are wheelchair accessible. Update the comparison.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "accessibility.json",
+          "json_path": "confirmed_accessible",
+          "expected": [
+            "V1",
+            "V3"
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "accessibility.json",
+          "json_path": "confirmed_inaccessible",
+          "expected": [
+            "V2"
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "accessibility.json",
+          "json_path": "unknown",
+          "expected": []
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

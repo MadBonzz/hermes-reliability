@@ -1,0 +1,251 @@
+{
+  "id": "scen_42_reimbursement_resume",
+  "name": "Resume a partially completed reimbursement batch",
+  "property_tested": "Durable progress tracking after history loss; selective resumption",
+  "mock_tools": [
+    {
+      "name": "submit_reimbursement",
+      "description": "Submit one reimbursement. invoice_id is its permanent operation reference; a repeated identical submission returns the existing receipt.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "amount_usd": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "invoice_id",
+          "amount_usd"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "reimbursements",
+        "operation": "idempotent_append",
+        "initial_state": {
+          "records": []
+        },
+        "idempotency_field": "invoice_id",
+        "receipt_prefix": "REIMBURSE"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please submit the first two reimbursements in {WORKSPACE}/batch.json today. The other two will wait. Keep progress.json up to date with a completed_ids array so we can finish the batch later.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "progress.json",
+          "json_path": "completed_ids",
+          "expected": [
+            "I1",
+            "I2"
+          ]
+        },
+        {
+          "type": "mock_array_unordered",
+          "json_path": "services.reimbursements.records",
+          "expected": [
+            {
+              "invoice_id": "I1",
+              "amount_usd": 12
+            },
+            {
+              "invoice_id": "I2",
+              "amount_usd": 18
+            }
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "submit_reimbursement",
+            "submit_reimbursement"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "batch.json",
+          "content": "[\n  {\n    \"invoice_id\": \"I1\",\n    \"amount_usd\": 12\n  },\n  {\n    \"invoice_id\": \"I2\",\n    \"amount_usd\": 18\n  },\n  {\n    \"invoice_id\": \"I3\",\n    \"amount_usd\": 25\n  },\n  {\n    \"invoice_id\": \"I4\",\n    \"amount_usd\": 40\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "progress.json",
+          "content": "{\n  \"completed_ids\": []\n}\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/batch.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/progress.json"
+            }
+          },
+          {
+            "tool": "submit_reimbursement",
+            "arguments": {
+              "invoice_id": "I1",
+              "amount_usd": 12
+            }
+          },
+          {
+            "tool": "submit_reimbursement",
+            "arguments": {
+              "invoice_id": "I2",
+              "amount_usd": 18
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/progress.json",
+              "content": "{\n  \"completed_ids\": [\n    \"I1\",\n    \"I2\"\n  ]\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Please finish the outstanding reimbursements from the batch in {WORKSPACE}. The processing register is progress.json.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "progress.json",
+          "json_path": "completed_ids",
+          "expected": [
+            "I1",
+            "I2",
+            "I3",
+            "I4"
+          ]
+        },
+        {
+          "type": "mock_array_unordered",
+          "json_path": "services.reimbursements.records",
+          "expected": [
+            {
+              "invoice_id": "I1",
+              "amount_usd": 12
+            },
+            {
+              "invoice_id": "I2",
+              "amount_usd": 18
+            },
+            {
+              "invoice_id": "I3",
+              "amount_usd": 25
+            },
+            {
+              "invoice_id": "I4",
+              "amount_usd": 40
+            }
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "submit_reimbursement",
+            "submit_reimbursement",
+            "submit_reimbursement",
+            "submit_reimbursement"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "truncate_history",
+          "keep_last_n_messages": 0
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/batch.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/progress.json"
+            }
+          },
+          {
+            "tool": "submit_reimbursement",
+            "arguments": {
+              "invoice_id": "I3",
+              "amount_usd": 25
+            }
+          },
+          {
+            "tool": "submit_reimbursement",
+            "arguments": {
+              "invoice_id": "I4",
+              "amount_usd": 40
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/progress.json",
+              "content": "{\n  \"completed_ids\": [\n    \"I1\",\n    \"I2\",\n    \"I3\",\n    \"I4\"\n  ]\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Are there any reimbursements still outstanding? Finish any that remain.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "progress.json",
+          "json_path": "completed_ids",
+          "expected": [
+            "I1",
+            "I2",
+            "I3",
+            "I4"
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "submit_reimbursement",
+            "submit_reimbursement",
+            "submit_reimbursement",
+            "submit_reimbursement"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

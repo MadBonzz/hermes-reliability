@@ -13,6 +13,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
+from .mock_services import MockServices
 from .utils import resolve_ws_path
 
 
@@ -44,6 +45,7 @@ class DynamicMockToolManager:
         self.workspace_dir = workspace_dir
         self.fault_flags = fault_flags
         self.registered_schemas: dict[str, dict[str, Any]] = {}
+        self.services = MockServices()
         self._registry_tools_backup: dict[str, Any] = {}
         self._toolsets_backup: dict[str, Any] = {}
         self._registry_metadata_backup: dict[str, Any] = {}
@@ -139,6 +141,20 @@ class DynamicMockToolManager:
         """Bind one declarative behavior to this scenario's workspace and flags."""
         behavior = tool_spec.get("behavior", {})
         kind = behavior.get("type", "static_return")
+        if kind == "stateful_service":
+            self.services.register(behavior)
+
+            def service_handler(args, **kwargs):
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except ValueError:
+                        args = None
+                return self.services.call(
+                    tool_spec["name"], behavior, args, self._fault_response, tool_spec["parameters"]
+                )
+
+            return service_handler
         mutation_types = {
             "state_append_and_optional_error",
             "state_kv_write_and_optional_error",
@@ -148,13 +164,23 @@ class DynamicMockToolManager:
             raise ValueError(f"Unknown mock behavior: {kind}")
 
         def handler(args: dict[str, Any], **kwargs) -> str:
+            import jsonschema
+
             if isinstance(args, str):
                 try:
                     args = json.loads(args)
                 except ValueError:
-                    args = {"raw": args}
+                    return json.dumps({"status": "error", "code": "INVALID_ARGUMENTS"})
             elif args is None:
                 args = {}
+            try:
+                jsonschema.Draft7Validator(
+                    tool_spec.get("parameters", {"type": "object"})
+                ).validate(args)
+            except jsonschema.ValidationError as exc:
+                return json.dumps(
+                    {"status": "error", "code": "INVALID_ARGUMENTS", "error": exc.message}
+                )
 
             delay_ms = int(behavior.get("delay_ms", 0))
             if delay_ms > 0 and kind != "unverified_race_deduct":
@@ -162,15 +188,18 @@ class DynamicMockToolManager:
             target = resolve_ws_path(
                 self.workspace_dir, behavior.get("target_file", "mock_state.json")
             )
-            target.parent.mkdir(parents=True, exist_ok=True)
             if kind in mutation_types:
+                target.parent.mkdir(parents=True, exist_ok=True)
                 return self._mutate_state(behavior, target, args)
 
             error = self._fault_response(behavior)
             if error is not None:
                 return error
             if behavior.get("read_target_file", False) and target.exists():
-                return target.read_text(encoding="utf-8")
+                try:
+                    return target.read_text(encoding="utf-8")
+                except (OSError, ValueError) as exc:
+                    return json.dumps({"status": "error", "error": f"Cannot read state: {exc}"})
             return json.dumps(behavior.get("return_payload", {"status": "ok"}))
 
         return handler
@@ -183,6 +212,11 @@ class DynamicMockToolManager:
         `resolve_toolset()` never filters out the mock tool.
         """
         self.snapshot_registry()
+
+        for spec in mock_specs:
+            behavior = spec["behavior"]
+            if behavior["type"] == "stateful_service" and "initial_state" in behavior:
+                self.services.register(behavior)
 
         supports_override = "override" in inspect.signature(self.registry.register).parameters
         for spec in mock_specs:

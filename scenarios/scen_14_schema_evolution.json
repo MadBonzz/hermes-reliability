@@ -1,91 +1,68 @@
 {
   "id": "scen_14_schema_evolution",
-  "name": "Scenario 14: Schema Evolution Adaptation (email_address -> contact.primary_email)",
-  "property_tested": "Schema Evolution / Backward & Forward Compatibility",
+  "name": "Append an email from a changed customer export",
+  "property_tested": "Input schema adaptation; preservation of previous output",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Create `{WORKSPACE}/user_v1.json` with `{\"name\": \"Alice\", \"email_address\": \"alice@example.com\"}` and write Alice's email into `{WORKSPACE}/emails.txt`.",
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "emails.txt",
-          "expected": "alice@example.com"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "alice@example.com"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 2,
-      "prompt": "Our schema upgraded in `{WORKSPACE}/user_v2.json`. Read `{WORKSPACE}/user_v2.json`, extract Bob's email from the new schema structure, and append it on a new line in `{WORKSPACE}/emails.txt`.",
-      "pre_turn_perturbations": [
-        {
-          "type": "write_file",
-          "path": "user_v2.json",
-          "content": "{\"full_name\": \"Bob\", \"SchemaVersion\": 2, \"contact\": {\"primary_email\": \"bob@example.com\"}}"
-        }
-      ],
+      "prompt": "Please start a mailing list from the customer export in {WORKSPACE}/user_v1.json. Save the email address in emails.txt, one address per line.",
       "state_checks": [
         {
           "type": "file_exact_lines",
           "path": "emails.txt",
           "expected": [
-            "alice@example.com",
-            "bob@example.com"
+            "alice@example.test"
           ]
         }
       ],
-      "process_checks": [
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
         {
-          "type": "min_total_tool_calls",
-          "count": 1
+          "type": "write_file",
+          "path": "user_v1.json",
+          "content": "{\n  \"name\": \"Alice\",\n  \"email_address\": \"alice@example.test\"\n}\n"
         }
       ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "bob@example.com"
-          ]
-        }
-      ]
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/user_v1.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/emails.txt",
+              "content": "alice@example.test\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
-      "turn_number": 3,
-      "prompt": "How many total emails are now recorded in `{WORKSPACE}/emails.txt`?",
+      "turn_number": 2,
+      "prompt": "Bob's export has arrived in user_v2.json. Please add his email to the same mailing list.",
       "state_checks": [
         {
-          "type": "file_line_count",
+          "type": "file_exact_lines",
           "path": "emails.txt",
-          "expected": 2
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 0
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "2",
-            "two"
+          "expected": [
+            "alice@example.test",
+            "bob@example.test"
           ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "user_v2.json",
+          "content": "{\n  \"full_name\": \"Bob\",\n  \"SchemaVersion\": 2,\n  \"contact\": {\n    \"primary_email\": \"bob@example.test\"\n  }\n}\n"
         }
       ]
     }

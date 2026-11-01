@@ -1,0 +1,36 @@
+{
+  "id": "scen_40_sensor_outlier_audit",
+  "name": "Reconcile a faulty stock-count sensor",
+  "property_tested": "Range validation and corroboration; not Byzantine consensus",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "The warehouse sensors disagree about the number of boxes on rack A. Their readings and our acceptance policy are in {WORKSPACE}/readings.json. Prepare count_review.json with accepted_count and rejected_sensor_ids. If the policy doesn't support a count, use null.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "count_review.json",
+          "json_path": "accepted_count",
+          "expected": 105
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "count_review.json",
+          "json_path": "rejected_sensor_ids",
+          "expected": [
+            "sensor-c"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "readings.json",
+          "content": "{\n  \"policy\": {\n    \"valid_min\": 0,\n    \"valid_max\": 200,\n    \"required_matching_independent_sensors\": 2\n  },\n  \"readings\": [\n    {\n      \"sensor_id\": \"sensor-a\",\n      \"count\": 105\n    },\n    {\n      \"sensor_id\": \"sensor-b\",\n      \"count\": 105\n    },\n    {\n      \"sensor_id\": \"sensor-c\",\n      \"count\": -999999\n    }\n  ]\n}\n"
+        }
+      ]
+    }
+  ]
+}

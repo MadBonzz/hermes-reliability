@@ -1,0 +1,72 @@
+{
+  "id": "scen_35_dated_scientific_release",
+  "name": "Select the data release available at a historical cutoff",
+  "property_tested": "As-of version selection; changed user time horizon",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "I'm reproducing a study frozen on 2024-06-15. Which annotation release for species Bluefin was the newest one available by then? The archive listing is {WORKSPACE}/releases.json. Save its release_id and url in selected_release.json; we don't need the download.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "selected_release.json",
+          "json_path": "release_id",
+          "expected": "r9"
+        },
+        {
+          "type": "json_equals",
+          "path": "selected_release.json",
+          "json_path": "url",
+          "expected": "https://archive.example.test/bluefin/r9.gff3"
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "releases.json",
+          "content": "[\n  {\n    \"species\": \"Bluefin\",\n    \"release_id\": \"r8\",\n    \"published\": \"2024-01-01\",\n    \"url\": \"https://archive.example.test/bluefin/r8.gff3\"\n  },\n  {\n    \"species\": \"Bluefin\",\n    \"release_id\": \"r10\",\n    \"published\": \"2024-07-01\",\n    \"url\": \"https://archive.example.test/bluefin/r10.gff3\"\n  },\n  {\n    \"species\": \"Bluefin\",\n    \"release_id\": \"r9\",\n    \"published\": \"2024-06-10\",\n    \"url\": \"https://archive.example.test/bluefin/r9.gff3\"\n  },\n  {\n    \"species\": \"Silverfin\",\n    \"release_id\": \"r11\",\n    \"published\": \"2024-06-14\",\n    \"url\": \"https://archive.example.test/silverfin/r11.gff3\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/releases.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/selected_release.json",
+              "content": "{\n  \"release_id\": \"r9\",\n  \"url\": \"https://archive.example.test/bluefin/r9.gff3\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "For a second comparison, use the cutoff 2024-07-02 instead. Update selected_release.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "selected_release.json",
+          "json_path": "release_id",
+          "expected": "r10"
+        },
+        {
+          "type": "json_equals",
+          "path": "selected_release.json",
+          "json_path": "url",
+          "expected": "https://archive.example.test/bluefin/r10.gff3"
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

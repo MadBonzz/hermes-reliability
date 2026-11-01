@@ -1,0 +1,204 @@
+{
+  "id": "v2_scen_53_feed_failover_recovery",
+  "name": "Refresh a dashboard through a feed outage and recovery",
+  "property_tested": "Fallback selection; freshness after dependency recovery",
+  "mock_tools": [
+    {
+      "name": "primary_ridership",
+      "description": "Get the preferred daily ridership count.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "primary",
+        "operation": "read",
+        "initial_state": {
+          "count": 120,
+          "source": "primary"
+        },
+        "error_when_flag_set": "primary_outage",
+        "error_message": "503: ridership feed unavailable"
+      }
+    },
+    {
+      "name": "backup_ridership",
+      "description": "Get the backup count for the same day and population.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "backup",
+        "operation": "read",
+        "initial_state": {
+          "count": 121,
+          "source": "backup"
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please update {WORKSPACE}/ridership.json with the latest daily count from our transport data service. The primary feed is preferred; the backup carries the same metric when the primary is unavailable. The file needs count and source.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "ridership.json",
+          "json_path": "count",
+          "expected": 120
+        },
+        {
+          "type": "json_equals",
+          "path": "ridership.json",
+          "json_path": "source",
+          "expected": "primary"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "primary_ridership"
+        }
+      ],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "primary_ridership",
+            "arguments": {}
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/ridership.json",
+              "content": "{\n  \"count\": 120,\n  \"source\": \"primary\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Please refresh the ridership dashboard for today's briefing.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "ridership.json",
+          "json_path": "count",
+          "expected": 121
+        },
+        {
+          "type": "json_equals",
+          "path": "ridership.json",
+          "json_path": "source",
+          "expected": "backup"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "backup_ridership"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "primary_outage",
+          "flag_value": true
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/ridership.json"
+            }
+          },
+          {
+            "tool": "primary_ridership",
+            "arguments": {}
+          },
+          {
+            "tool": "backup_ridership",
+            "arguments": {}
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/ridership.json",
+              "content": "{\n  \"count\": 121,\n  \"source\": \"backup\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "The primary feed is healthy again and has today's final figure. Please refresh the dashboard.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "ridership.json",
+          "json_path": "count",
+          "expected": 125
+        },
+        {
+          "type": "json_equals",
+          "path": "ridership.json",
+          "json_path": "source",
+          "expected": "primary"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "primary_ridership"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "primary_outage",
+          "flag_value": false
+        },
+        {
+          "type": "set_mock_state",
+          "service": "primary",
+          "values": {
+            "count": 125,
+            "source": "primary"
+          }
+        }
+      ]
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Fallback selection",
+    "turns": 3,
+    "input_files": 0,
+    "services": 2,
+    "records": 0,
+    "dependency_depth": 3,
+    "fault_types": [
+      "primary_outage"
+    ],
+    "interaction": "mixed",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 1
+  }
+}

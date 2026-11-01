@@ -71,6 +71,7 @@ def apply_perturbations(
     history: list[dict[str, Any]],
     agent: Any | None = None,
     events: list[dict[str, Any]] | None = None,
+    mock_services=None,
 ) -> list[dict[str, Any]]:
     """Executes declarative pre-turn perturbations or post-turn cleanups."""
     for p in perturbations:
@@ -79,12 +80,17 @@ def apply_perturbations(
         if events is not None:
             events.append(event)
 
-        if p_type in ("write_file", "append_file"):
+        if p_type == "set_mock_state":
+            if mock_services is None:
+                raise ValueError("set_mock_state requires the scenario's service manager")
+            mock_services.patch(p["service"], p["values"])
+
+        elif p_type in ("write_file", "append_file"):
             target = resolve_ws_path(workspace, p["path"])
             target.parent.mkdir(parents=True, exist_ok=True)
             content = p.get("content", "").replace("{WORKSPACE}", workspace.as_posix())
             mode = "w" if p_type == "write_file" else "a"
-            with target.open(mode, encoding="utf-8") as stream:
+            with target.open(mode, encoding="utf-8", newline="") as stream:
                 stream.write(content)
 
         elif p_type == "delete_file":

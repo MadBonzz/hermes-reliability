@@ -1,0 +1,74 @@
+{
+  "id": "scen_61_code_handoff_actuation",
+  "name": "Apply supplied code to a real project artifact",
+  "property_tested": "Actuation versus prose simulation; literal code handoff",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please add this helper to {WORKSPACE}/prices.py:\n\ndef total_with_fee(amount):\n    return round(amount * 1.05, 2)\n\nThe file is new; it should contain this function and no other application behavior.",
+      "state_checks": [
+        {
+          "type": "python_ast_equals",
+          "path": "prices.py",
+          "expected": "def total_with_fee(amount):\n    return round(amount * 1.05, 2)\n"
+        },
+        {
+          "type": "python_syntax",
+          "path": "prices.py"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_total_tool_calls",
+          "count": 1
+        }
+      ],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/prices.py",
+              "content": "def total_with_fee(amount):\n    return round(amount * 1.05, 2)\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Use that pricing rule for the amounts in orders.json. Save the resulting totals, in the original order, as an array in totals.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "totals.json",
+          "expected": [
+            10.5,
+            21,
+            31.5
+          ]
+        },
+        {
+          "type": "python_ast_equals",
+          "path": "prices.py",
+          "expected": "def total_with_fee(amount):\n    return round(amount * 1.05, 2)\n"
+        },
+        {
+          "type": "python_syntax",
+          "path": "prices.py"
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "orders.json",
+          "content": "[\n  10,\n  20,\n  30\n]\n"
+        }
+      ]
+    }
+  ]
+}

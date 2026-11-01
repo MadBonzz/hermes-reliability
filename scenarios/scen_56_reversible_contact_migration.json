@@ -1,0 +1,123 @@
+{
+  "id": "scen_56_reversible_contact_migration",
+  "name": "Move a contact list between application versions",
+  "property_tested": "Reversible schema migration; preservation of intervening data",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Our new address-book app needs each contact's email inside contact.primary_email instead of the old email field. Convert {WORKSPACE}/contacts.json to that format, preserving IDs and names.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "contacts.json",
+          "expected": [
+            {
+              "id": "C1",
+              "name": "Ari",
+              "contact": {
+                "primary_email": "ari@example.test"
+              }
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "contacts.json",
+          "content": "[\n  {\n    \"id\": \"C1\",\n    \"name\": \"Ari\",\n    \"email\": \"ari@example.test\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/contacts.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/contacts.json",
+              "content": "[\n  {\n    \"id\": \"C1\",\n    \"name\": \"Ari\",\n    \"contact\": {\n      \"primary_email\": \"ari@example.test\"\n    }\n  }\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Add Bea, ID C2, at bea@example.test to the address book.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "contacts.json",
+          "expected": [
+            {
+              "id": "C1",
+              "name": "Ari",
+              "contact": {
+                "primary_email": "ari@example.test"
+              }
+            },
+            {
+              "id": "C2",
+              "name": "Bea",
+              "contact": {
+                "primary_email": "bea@example.test"
+              }
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/contacts.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/contacts.json",
+              "content": "[\n  {\n    \"id\": \"C1\",\n    \"name\": \"Ari\",\n    \"contact\": {\n      \"primary_email\": \"ari@example.test\"\n    }\n  },\n  {\n    \"id\": \"C2\",\n    \"name\": \"Bea\",\n    \"contact\": {\n      \"primary_email\": \"bea@example.test\"\n    }\n  }\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "We're returning to the old app. Restore the flat email format, including everyone we've added since the upgrade.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "contacts.json",
+          "expected": [
+            {
+              "id": "C1",
+              "name": "Ari",
+              "email": "ari@example.test"
+            },
+            {
+              "id": "C2",
+              "name": "Bea",
+              "email": "bea@example.test"
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

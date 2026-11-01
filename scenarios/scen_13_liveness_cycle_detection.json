@@ -1,50 +1,17 @@
 {
   "id": "scen_13_liveness_cycle_detection",
-  "name": "Scenario 13: Cyclic Pointer Detection and Bounded Termination",
-  "property_tested": "Liveness (Terminating on cyclic references without infinite loop)",
+  "name": "Total a linked collection with a circular reference",
+  "property_tested": "Bounded traversal and unique-record aggregation",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Create `{WORKSPACE}/node1.json` with `{\"val\": 10, \"next\": \"node2.json\"}`, `{WORKSPACE}/node2.json` with `{\"val\": 20, \"next\": \"node3.json\"}`, and `{WORKSPACE}/node3.json` with `{\"val\": 30, \"next\": \"node1.json\"}`.",
+      "prompt": "Please total the values in the linked collection starting at {WORKSPACE}/node1.json. Count each file once and save total in collection_total.json. This is a small audit with a budget of six tool calls.",
       "state_checks": [
         {
-          "type": "file_exists",
-          "path": "node1.json"
-        },
-        {
-          "type": "file_exists",
-          "path": "node2.json"
-        },
-        {
-          "type": "file_exists",
-          "path": "node3.json"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "node1",
-            "node3",
-            "created"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 2,
-      "prompt": "Starting at `{WORKSPACE}/node1.json`, follow the `next` links, stop as soon as you detect a cycle, and write the sum of unique nodes' `val` fields into `{WORKSPACE}/cycle_sum.txt`.",
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "cycle_sum.txt",
-          "expected": "60"
+          "type": "json_equals",
+          "path": "collection_total.json",
+          "json_path": "total",
+          "expected": 60
         }
       ],
       "process_checks": [
@@ -53,40 +20,75 @@
           "count": 6
         }
       ],
-      "output_checks": [
+      "output_checks": [],
+      "pre_turn_perturbations": [
         {
-          "type": "contains_any",
-          "values": [
-            "60",
-            "cycle"
-          ]
+          "type": "write_file",
+          "path": "node1.json",
+          "content": "{\n  \"val\": 10,\n  \"next\": \"node2.json\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "node2.json",
+          "content": "{\n  \"val\": 20,\n  \"next\": \"node3.json\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "node3.json",
+          "content": "{\n  \"val\": 30,\n  \"next\": \"node1.json\"\n}\n"
         }
-      ]
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/node1.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/node2.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/node3.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/collection_total.json",
+              "content": "{\n  \"total\": 60\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
-      "turn_number": 3,
-      "prompt": "Which node caused the cycle back to the start?",
+      "turn_number": 2,
+      "prompt": "Which file links back to the starting file? Put its filename in circular_link.txt.",
       "state_checks": [
         {
-          "type": "file_contains",
-          "path": "cycle_sum.txt",
-          "expected": "60"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "max_total_tool_calls",
-          "count": 2
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "node3"
+          "type": "file_exact_lines",
+          "path": "circular_link.txt",
+          "expected": [
+            "node3.json"
           ]
+        },
+        {
+          "type": "json_equals",
+          "path": "collection_total.json",
+          "json_path": "total",
+          "expected": 60
         }
-      ]
+      ],
+      "process_checks": [],
+      "output_checks": []
     }
   ]
 }

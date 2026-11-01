@@ -1,15 +1,41 @@
 import io
 import json
 from contextlib import redirect_stderr
+from copy import deepcopy
 from unittest.mock import patch
 
 from src import eval_runner as runner
 from src.runtime_support import sha256_file
-from src.scenario_validation import load_scenarios, suite_sha256, validate_suite
+from src.scenario_validation import (
+    external_schema_ref,
+    load_scenarios,
+    suite_sha256,
+    validate_suite,
+)
 from tests.helpers import TemporaryDirectoryTestCase, mock, scenario
 
 
 class ScenarioFileTests(TemporaryDirectoryTestCase):
+    def test_external_schema_references_are_detected_without_resolution(self):
+        self.assertFalse(external_schema_ref({"items": [{"$ref": "#/definitions/local"}]}))
+        for reference in ("other.json", "file:///private.json", "https://example.invalid/schema"):
+            self.assertTrue(external_schema_ref({"items": [{"nested": {"$ref": reference}}]}))
+
+    def test_file_version_is_limited_to_file_comparison_and_known_snapshots(self):
+        spec = scenario()
+        check = {"type": "mock_text_matches_file", "path": "draft.txt", "json_path": "body"}
+        spec["turns"][0]["state_checks"] = [check]
+        suite = {"suite_name": "test", "scenarios": [spec]}
+        for version in ("before_turn", "after_turn"):
+            check["file_version"] = version
+            validate_suite(suite, self.schema)
+        check["file_version"] = "missing_version"
+        with self.assertRaises(ValueError):
+            validate_suite(suite, self.schema)
+        check.update(type="file_exists", file_version="before_turn")
+        with self.assertRaises(ValueError):
+            validate_suite(suite, self.schema)
+
     def setUp(self):
         super().setUp()
         self.schema = runner.PROJECT_ROOT / "scenario.schema.json"
@@ -110,3 +136,112 @@ class ScenarioFileTests(TemporaryDirectoryTestCase):
                 self.assertNotIn("Traceback", stderr.getvalue())
                 load.assert_not_called()
                 write.assert_not_called()
+
+    def service_spec(self):
+        tool = mock("update_event")
+        tool["parameters"] = {
+            "type": "object",
+            "properties": {"expected_version": {"type": "integer"}},
+            "required": ["expected_version"],
+        }
+        tool["behavior"] = {
+            "type": "stateful_service",
+            "service": "event",
+            "operation": "compare_and_swap",
+            "initial_state": {"version": 1},
+            "updates": {"room": "Maple"},
+        }
+        return scenario(mocks=[tool])
+
+    def test_service_contracts_validate_before_loading_hermes(self):
+        valid = self.service_spec()
+        path = self.write("service.json", valid)
+        self.assertEqual(valid, load_scenarios(path, self.schema)[0]["scenarios"][0])
+        mutations = [
+            ("expected_version", lambda t: t["parameters"].update(required=[])),
+            (
+                "initial integer version",
+                lambda t: t["behavior"]["initial_state"].update(version=True),
+            ),
+            (
+                "parameter schema",
+                lambda t: t["parameters"]["properties"].update(bad={"type": "bogus"}),
+            ),
+            ("arguments must be an object", lambda t: t.update(parameters={"type": "array"})),
+            ("return_payload must be an object", lambda t: t["behavior"].update(return_payload=[])),
+        ]
+        for message, mutate in mutations:
+            with self.subTest(message=message):
+                invalid = deepcopy(valid)
+                mutate(invalid["mock_tools"][0])
+                self.write("service.json", invalid)
+                with self.assertRaisesRegex(ValueError, message):
+                    load_scenarios(path, self.schema)
+
+    def test_service_initial_states_must_agree_independent_of_declaration_order(self):
+        spec = self.service_spec()
+        reader = mock("read_event")
+        reader["behavior"] = {"type": "stateful_service", "service": "event", "operation": "read"}
+        spec["mock_tools"].insert(0, reader)
+        path = self.write("service.json", spec)
+        load_scenarios(path, self.schema)
+        reader["behavior"]["initial_state"] = {"version": 2}
+        self.write("service.json", spec)
+        with self.assertRaisesRegex(ValueError, "conflicting initial state"):
+            load_scenarios(path, self.schema)
+
+    def test_fault_cannot_patch_an_undeclared_service(self):
+        spec = self.service_spec()
+        spec["turns"][0]["pre_turn_perturbations"] = [
+            {"type": "set_mock_state", "service": "unknown", "values": {"version": 2}}
+        ]
+        path = self.write("service.json", spec)
+        with self.assertRaisesRegex(ValueError, "unknown mock service"):
+            load_scenarios(path, self.schema)
+
+    def test_service_identity_fields_must_be_required_strings(self):
+        for operation, field in (
+            ("idempotent_append", "idempotency_field"),
+            ("lookup", "lookup_arg"),
+        ):
+            with self.subTest(operation=operation):
+                spec = self.service_spec()
+                tool = spec["mock_tools"][0]
+                tool["parameters"] = {"type": "object", "properties": {"token": {"type": "string"}}}
+                tool["behavior"] = {
+                    "type": "stateful_service",
+                    "service": "event",
+                    "operation": operation,
+                    field: "token",
+                    "responses": {},
+                }
+                path = self.write("service.json", spec)
+                with self.assertRaisesRegex(ValueError, "required string argument"):
+                    load_scenarios(path, self.schema)
+                tool["parameters"]["required"] = ["token"]
+                self.write("service.json", spec)
+                load_scenarios(path, self.schema)
+
+    def test_new_check_types_reject_malformed_expectations_at_preflight(self):
+        for check_type, expected in (
+            ("json_array_unordered", {}),
+            ("file_sha256", "not-a-sha256"),
+            ("directory_files", ["same.txt", "same.txt"]),
+            ("mock_effects_equal", [1]),
+            ("mock_array_unordered", {}),
+            ("csv_rows_equal", [1]),
+            ("python_ast_equals", []),
+        ):
+            with self.subTest(check_type=check_type):
+                spec = scenario()
+                spec["turns"][0]["state_checks"] = [
+                    {
+                        "type": check_type,
+                        "path": "input.json",
+                        "json_path": "records",
+                        "expected": expected,
+                    }
+                ]
+                path = self.write("bad_check.json", spec)
+                with self.assertRaisesRegex(ValueError, "expected"):
+                    load_scenarios(path, self.schema)

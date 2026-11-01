@@ -1,0 +1,105 @@
+{
+  "id": "v2_scen_76_sequence_ordered_events",
+  "name": "Reconcile delayed shipment updates",
+  "property_tested": "Sequence-based ordering; clock skew and delayed arrival",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "What's the current state of shipment S9 according to the feed export and contract under {WORKSPACE}? Reply with JSON fields shipment_id, current_status and last_sequence.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": "S9",
+          "json_path": "shipment_id"
+        },
+        {
+          "type": "json_answer",
+          "expected": "shipped",
+          "json_path": "current_status"
+        },
+        {
+          "type": "json_answer",
+          "expected": 3,
+          "json_path": "last_sequence"
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "feed_contract.json",
+          "content": "{\n  \"ordering\": \"sequence increases with each state transition for a shipment; timestamps come from different device clocks and arrival order can differ\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "events.json",
+          "content": "[\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 1,\n    \"ts\": \"2026-10-01T09:00:00Z\",\n    \"status\": \"received\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 3,\n    \"ts\": \"2026-10-01T09:02:00Z\",\n    \"status\": \"shipped\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 2,\n    \"ts\": \"2026-10-01T09:05:00Z\",\n    \"status\": \"packed\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/feed_contract.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/events.json"
+            }
+          }
+        ],
+        "final_response": "{\"shipment_id\": \"S9\", \"current_status\": \"shipped\", \"last_sequence\": 3}"
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "A new event export has arrived. What's the current shipment state? Use the same reply format.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": "S9",
+          "json_path": "shipment_id"
+        },
+        {
+          "type": "json_answer",
+          "expected": "delivered",
+          "json_path": "current_status"
+        },
+        {
+          "type": "json_answer",
+          "expected": 4,
+          "json_path": "last_sequence"
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "events.json",
+          "content": "[\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 1,\n    \"ts\": \"2026-10-01T09:00:00Z\",\n    \"status\": \"received\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 3,\n    \"ts\": \"2026-10-01T09:02:00Z\",\n    \"status\": \"shipped\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 4,\n    \"ts\": \"2026-10-01T09:03:00Z\",\n    \"status\": \"delivered\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 2,\n    \"ts\": \"2026-10-01T09:05:00Z\",\n    \"status\": \"packed\"\n  }\n]\n"
+        }
+      ]
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Sequence-based ordering",
+    "turns": 2,
+    "input_files": 2,
+    "services": 0,
+    "records": 8,
+    "dependency_depth": 2,
+    "fault_types": [
+      "delayed_out_of_order_events"
+    ],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 0
+  }
+}

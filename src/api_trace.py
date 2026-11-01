@@ -6,6 +6,7 @@ wrapping one SDK client. Only chat-completions requests are recorded. The privat
 HTTPX boundary/decoder are covered by tests and the bounded httpx dependency.
 """
 
+import asyncio
 import codecs
 import json
 import re
@@ -190,10 +191,28 @@ class _AsyncStream(httpx.AsyncByteStream):
             self.capture.finish(False)
 
 
+class RequestPacer:
+    """Shared per-run dispatch spacing, including retries and diagnostic branches."""
+
+    def __init__(self, interval=0):
+        self.interval = interval
+        self.next_dispatch = 0.0
+        self.lock = threading.Lock()
+
+    def reserve(self):
+        with self.lock:
+            now = time.monotonic()
+            delay = max(0, self.next_dispatch - now)
+            self.next_dispatch = now + delay + self.interval
+            return delay
+
+
 class APITrace:
     """Append a scenario's API evidence immediately, outside its disposable workspace."""
 
-    def __init__(self, path, *, run_id, scenario_id, redactor=None):
+    def __init__(
+        self, path, *, run_id, scenario_id, redactor=None, pacer=None, input_validator=None
+    ):
         self.path = Path(path)
         self.redact = redactor or SecretRedactor()
         self.context = {
@@ -206,6 +225,14 @@ class APITrace:
         self.errors = []
         self.captures = []
         self._lock = threading.RLock()
+        self.pacer = pacer
+        self.input_validator = input_validator
+
+    def pacing_delay(self):
+        delay = self.pacer.reserve() if self.pacer else 0
+        if delay:
+            self.record("api_dispatch_wait", **self.context, seconds=delay)
+        return delay
 
     def set_context(self, turn_number, phase):
         with self._lock:
@@ -234,6 +261,12 @@ class APITrace:
 
     def begin(self, request, content):
         self.raise_if_failed()
+        if self.input_validator:
+            try:
+                self.input_validator(_body(content.decode("utf-8")))
+            except ValueError as exc:
+                self.errors.append(str(exc))
+                raise
         self.redact.learn_headers(request.headers)
         with self._lock:
             self.requests += 1
@@ -295,6 +328,7 @@ class APITrace:
             def send(client, request):
                 if not self.matches(request):
                     return self._sync(client, request)
+                time.sleep(self.pacing_delay())
                 state = self.begin(request, request.read())
                 try:
                     return self.response(state, self._sync(client, request))
@@ -305,6 +339,7 @@ class APITrace:
             async def asend(client, request):
                 if not self.matches(request):
                     return await self._async(client, request)
+                await asyncio.sleep(self.pacing_delay())
                 state = self.begin(request, await request.aread())
                 try:
                     return self.response(

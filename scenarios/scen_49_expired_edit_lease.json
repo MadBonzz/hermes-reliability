@@ -1,0 +1,180 @@
+{
+  "id": "scen_49_expired_edit_lease",
+  "name": "Update inventory after an editing lease expires",
+  "property_tested": "Lease validity; recovery from stale edit authority",
+  "mock_tools": [
+    {
+      "name": "get_inventory",
+      "description": "Get the inventory count, edit version and lease_valid status.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "inventory",
+        "operation": "read",
+        "initial_state": {
+          "count": 10,
+          "version": 1,
+          "lease_valid": true
+        }
+      }
+    },
+    {
+      "name": "renew_inventory_lease",
+      "description": "Acquire a new editing lease and return the inventory card with its current version.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "inventory",
+        "operation": "transition",
+        "requires": {
+          "lease_valid": false
+        },
+        "updates": {
+          "lease_valid": true,
+          "version": 2
+        }
+      }
+    },
+    {
+      "name": "update_inventory",
+      "description": "Set count under a valid editing lease and matching expected_version. Rejected writes change nothing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "expected_version": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "expected_version",
+          "count"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "inventory",
+        "operation": "compare_and_swap",
+        "requires": {
+          "lease_valid": true
+        },
+        "rejection": {
+          "status": "error",
+          "code": "LEASE_EXPIRED",
+          "message": "The editing lease has expired."
+        },
+        "updates": {
+          "count": {
+            "$arg": "count"
+          }
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Get the current inventory card and save it as {WORKSPACE}/inventory_review.json. I want to check the count before changing it.",
+      "state_checks": [
+        {
+          "type": "json_path_equals",
+          "path": "inventory_review.json",
+          "json_path": "count",
+          "expected": 10
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": []
+        },
+        {
+          "type": "json_equals",
+          "path": "inventory_review.json",
+          "json_path": "version",
+          "expected": 1
+        },
+        {
+          "type": "json_equals",
+          "path": "inventory_review.json",
+          "json_path": "lease_valid",
+          "expected": true
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "get_inventory"
+        }
+      ],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "get_inventory",
+            "arguments": {}
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/inventory_review.json",
+              "content": "{\n  \"count\": 10,\n  \"version\": 1,\n  \"lease_valid\": true\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "We've received five more units. Update the inventory to include them.",
+      "state_checks": [
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.inventory.count",
+          "expected": 15
+        },
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.inventory.version",
+          "expected": 3
+        },
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.inventory.lease_valid",
+          "expected": true
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "renew_inventory_lease",
+            "update_inventory"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "set_mock_state",
+          "service": "inventory",
+          "values": {
+            "lease_valid": false
+          }
+        }
+      ]
+    }
+  ]
+}

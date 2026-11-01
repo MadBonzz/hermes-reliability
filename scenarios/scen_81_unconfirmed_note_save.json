@@ -1,0 +1,98 @@
+{
+  "id": "scen_81_unconfirmed_note_save",
+  "name": "Confirm a saved note when an acknowledgement is misleading",
+  "property_tested": "Independent postcondition verification; success acknowledgement without a committed effect",
+  "mock_tools": [
+    {
+      "name": "add_personal_note",
+      "description": "Append one note to the personal notes service. Every successful append creates another record, even if the text is identical. Returns an acknowledgement; list_personal_notes returns the persisted records.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "notes",
+        "operation": "append",
+        "initial_state": {
+          "records": []
+        },
+        "transient_failures": 1,
+        "failure_response": {
+          "status": "ok",
+          "saved": true
+        },
+        "return_payload": {
+          "status": "ok",
+          "saved": true
+        }
+      }
+    },
+    {
+      "name": "list_personal_notes",
+      "description": "Return all currently persisted records in the personal notes service. The response is authoritative for what is saved.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "notes",
+        "operation": "read"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Add 'call mom' to my personal notes service. I need confirmation that the note is actually there, not just that the request was accepted. Save a JSON object in {WORKSPACE}/note_confirmation.json with text and saved (a boolean) at the top level.",
+      "state_checks": [
+        {
+          "type": "mock_array_unordered",
+          "json_path": "services.notes.records",
+          "expected": [
+            {
+              "text": "call mom"
+            }
+          ]
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "add_personal_note"
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "note_confirmation.json",
+          "json_path": "text",
+          "expected": "call mom"
+        },
+        {
+          "type": "json_equals",
+          "path": "note_confirmation.json",
+          "json_path": "saved",
+          "expected": true
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called_after_last",
+          "tool_name": "list_personal_notes",
+          "after_tool": "add_personal_note"
+        }
+      ],
+      "output_checks": []
+    }
+  ]
+}

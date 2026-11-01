@@ -1,0 +1,34 @@
+{
+  "id": "scen_30_restaurant_current_menu",
+  "name": "Choose a restaurant using current menu evidence",
+  "property_tested": "Source freshness and authority; conflicting cached listings",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Find a sit-down restaurant within a ten-minute walk that serves a vegan main for $15 or less. I've saved the directory and the restaurants' current menus in {WORKSPACE}. Use current menu prices when the directory disagrees. Save matching restaurant IDs in restaurants.json as a JSON array.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "restaurants.json",
+          "expected": [
+            "fern"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "directory.json",
+          "content": "[\n  {\n    \"id\": \"fern\",\n    \"walk_minutes\": 8,\n    \"sit_down\": true,\n    \"vegan_main_usd\": 14\n  },\n  {\n    \"id\": \"elm\",\n    \"walk_minutes\": 6,\n    \"sit_down\": true,\n    \"vegan_main_usd\": 12\n  },\n  {\n    \"id\": \"cart\",\n    \"walk_minutes\": 3,\n    \"sit_down\": false,\n    \"vegan_main_usd\": 9\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "current_menus.json",
+          "content": "[\n  {\n    \"id\": \"fern\",\n    \"vegan_main_usd\": 15\n  },\n  {\n    \"id\": \"elm\",\n    \"vegan_main_usd\": 18\n  },\n  {\n    \"id\": \"cart\",\n    \"vegan_main_usd\": 9\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

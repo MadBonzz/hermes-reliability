@@ -1,101 +1,76 @@
 {
   "id": "scen_05_durability_compaction",
-  "name": "Scenario 5: Constraint Persistence Across Context Compression",
-  "property_tested": "Durability (Re-reading persistent rules after context compaction)",
+  "name": "Recover a laptop shortlist from saved requirements",
+  "property_tested": "File-based constraint persistence across context compression",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Save my buying rules into `{WORKSPACE}/rules.json`: `{\"max_price\": 1200, \"min_ram_gb\": 16}`.",
+      "prompt": "I'm shopping for a laptop with at least 16 GB of RAM and a maximum price of $1,200. Please save that buying brief in {WORKSPACE}/rules.json using max_price and min_ram_gb; I'll send the offers later.",
       "state_checks": [
         {
-          "type": "json_path_equals",
+          "type": "json_equals",
           "path": "rules.json",
           "json_path": "max_price",
           "expected": 1200
+        },
+        {
+          "type": "json_equals",
+          "path": "rules.json",
+          "json_path": "min_ram_gb",
+          "expected": 16
         }
       ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "1200",
-            "16",
-            "saved"
-          ]
-        }
-      ]
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/rules.json",
+              "content": "{\n  \"max_price\": 1200,\n  \"min_ram_gb\": 16\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 2,
-      "prompt": "Create `{WORKSPACE}/candidates.json` with three laptops: `[{\"id\": \"L1\", \"price\": 1100, \"ram_gb\": 16}, {\"id\": \"L2\", \"price\": 1500, \"ram_gb\": 32}, {\"id\": \"L3\", \"price\": 900, \"ram_gb\": 8}]`.",
+      "prompt": "The offers are in {WORKSPACE}/candidates.json now. Please shortlist every laptop that meets my buying brief and put their IDs in shortlist.json as an array.",
       "state_checks": [
         {
-          "type": "json_key_count",
-          "path": "candidates.json",
-          "expected": 3
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "l1",
-            "candidates"
+          "type": "json_array_unordered",
+          "path": "shortlist.json",
+          "expected": [
+            "L1"
           ]
+        },
+        {
+          "type": "json_equals",
+          "path": "rules.json",
+          "json_path": "max_price",
+          "expected": 1200
+        },
+        {
+          "type": "json_equals",
+          "path": "rules.json",
+          "json_path": "min_ram_gb",
+          "expected": 16
         }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Read my saved rules from `{WORKSPACE}/rules.json` and the options in `{WORKSPACE}/candidates.json`, and write ONLY the matching laptop ID(s) into `{WORKSPACE}/shortlist.txt`.",
+      ],
+      "process_checks": [],
+      "output_checks": [],
       "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "candidates.json",
+          "content": "[\n  {\n    \"id\": \"L1\",\n    \"price\": 1100,\n    \"ram_gb\": 16\n  },\n  {\n    \"id\": \"L2\",\n    \"price\": 1500,\n    \"ram_gb\": 32\n  },\n  {\n    \"id\": \"L3\",\n    \"price\": 900,\n    \"ram_gb\": 8\n  }\n]\n"
+        },
         {
           "type": "compress_context",
           "keep_last_n_messages": 0,
           "use_native_compressor": true
-        }
-      ],
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "shortlist.txt",
-          "expected": "L1"
-        },
-        {
-          "type": "file_not_contains",
-          "path": "shortlist.txt",
-          "expected": "L2"
-        },
-        {
-          "type": "file_not_contains",
-          "path": "shortlist.txt",
-          "expected": "L3"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 2
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "l1"
-          ]
         }
       ]
     }

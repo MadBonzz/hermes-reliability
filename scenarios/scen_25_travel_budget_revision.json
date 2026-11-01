@@ -1,0 +1,142 @@
+{
+  "id": "scen_25_travel_budget_revision",
+  "name": "Revise a trip shortlist as priorities change",
+  "property_tested": "Hard constraints; instruction supersession over multiple turns",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "I'm choosing a three-night stay. My maximum total is $360 and I need step-free access. The offers in {WORKSPACE}/hotels.json are total prices including fees. Save all matching hotel IDs in shortlist.json as an array.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "shortlist.json",
+          "expected": [
+            "river",
+            "garden"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "hotels.json",
+          "content": "[\n  {\n    \"id\": \"river\",\n    \"total_usd\": 330,\n    \"step_free\": true,\n    \"breakfast\": false\n  },\n  {\n    \"id\": \"garden\",\n    \"total_usd\": 350,\n    \"step_free\": true,\n    \"breakfast\": true\n  },\n  {\n    \"id\": \"loft\",\n    \"total_usd\": 310,\n    \"step_free\": false,\n    \"breakfast\": true\n  },\n  {\n    \"id\": \"hill\",\n    \"total_usd\": 390,\n    \"step_free\": true,\n    \"breakfast\": true\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/hotels.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/shortlist.json",
+              "content": "[\n  \"river\",\n  \"garden\"\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Breakfast needs to be included too.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "shortlist.json",
+          "expected": [
+            "garden"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/hotels.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/shortlist.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/shortlist.json",
+              "content": "[\n  \"garden\"\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "I can spend $400 now. Keep my other requirements.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "shortlist.json",
+          "expected": [
+            "garden",
+            "hill"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/hotels.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/shortlist.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/shortlist.json",
+              "content": "[\n  \"garden\",\n  \"hill\"\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 4,
+      "prompt": "The higher budget was a mistake; we're back to $360. Please finalize shortlist.json.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "shortlist.json",
+          "expected": [
+            "garden"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

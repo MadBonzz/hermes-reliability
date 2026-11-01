@@ -1,0 +1,46 @@
+{
+  "id": "v2_scen_31_shipping_total_cost",
+  "name": "Compare delivery quotes on equal terms",
+  "property_tested": "Comparable total cost; units and deadline constraints",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Which quote in {WORKSPACE}/quotes.json is cheapest for delivery within five business days, including all mandatory surcharges? Reply with JSON fields carrier and total_usd.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": "Beacon",
+          "json_path": "carrier"
+        },
+        {
+          "type": "json_answer",
+          "expected": 29,
+          "json_path": "total_usd"
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "quotes.json",
+          "content": "[\n  {\n    \"carrier\": \"Arrow\",\n    \"base_usd\": 22,\n    \"fuel_usd\": 5,\n    \"handling_usd\": 6,\n    \"business_days\": 4\n  },\n  {\n    \"carrier\": \"Beacon\",\n    \"base_usd\": 26,\n    \"fuel_usd\": 3,\n    \"handling_usd\": 0,\n    \"business_days\": 5\n  },\n  {\n    \"carrier\": \"Coast\",\n    \"base_usd\": 18,\n    \"fuel_usd\": 2,\n    \"handling_usd\": 0,\n    \"business_days\": 7\n  }\n]\n"
+        }
+      ]
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Comparable total cost",
+    "turns": 1,
+    "input_files": 1,
+    "services": 0,
+    "records": 3,
+    "dependency_depth": 3,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
+}

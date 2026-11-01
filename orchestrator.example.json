@@ -1,0 +1,28 @@
+{
+  "scope": "Evaluate the complete agentic system on local software/distributed-system properties. Expand coverage and investigate past failures with discriminating end-to-end tests.",
+  "orchestrator": {
+    "base_url": "http://localhost:1234/v1",
+    "model": "YOUR_ORCHESTRATOR_MODEL_ID",
+    "api_key_env": "ORCHESTRATOR_API_KEY",
+    "max_request_characters": 2000000,
+    "timeout_seconds": 180
+  },
+  "target": {
+    "base_url": "http://localhost:1234/v1",
+    "model": "YOUR_TARGET_MODEL_ID",
+    "api_key_env": "TARGET_API_KEY"
+  },
+  "adapter": {
+    "kind": "hermes",
+    "python": "PATH_TO_HERMES_ENVIRONMENT_PYTHON",
+    "hermes_root": "PATH_TO_HERMES_CHECKOUT",
+    "max_iterations": 15,
+    "request_interval": 0,
+    "timeout_seconds": 3600,
+    "capabilities": "The supplied scenario schema and existing harness define supported mocks, faults, checks and reference prefixes. File guards cover native file tools only; terminal/Python are not sandboxed. Unsupported new mechanisms require adapter development."
+  },
+  "documents": ["AGENTS.md", "PROPERTY_CATALOG.md"],
+  "diagrams": [],
+  "past_scenarios": ["scenarios"],
+  "limits": {"cycles": 3, "scenarios_per_cycle": 3, "requests": 40, "quiet_cycles": 2}
+}

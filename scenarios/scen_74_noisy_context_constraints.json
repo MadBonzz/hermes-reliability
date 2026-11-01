@@ -1,0 +1,246 @@
+{
+  "id": "scen_74_noisy_context_constraints",
+  "name": "Retain travel constraints through unrelated work and noisy output",
+  "property_tested": "Longer-horizon constraint fidelity; distracting tool output",
+  "mock_tools": [
+    {
+      "name": "booking_diagnostics",
+      "description": "Retrieve a verbose booking-helper diagnostic log.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "static_return",
+        "return_payload": {
+          "incident_id": "DIAG-3",
+          "log": "TRACE 000 cache worker inspected segment 0; no application state changed.\nTRACE 001 cache worker inspected segment 1; no application state changed.\nTRACE 002 cache worker inspected segment 2; no application state changed.\nTRACE 003 cache worker inspected segment 3; no application state changed.\nTRACE 004 cache worker inspected segment 4; no application state changed.\nTRACE 005 cache worker inspected segment 5; no application state changed.\nTRACE 006 cache worker inspected segment 6; no application state changed.\nTRACE 007 cache worker inspected segment 7; no application state changed.\nTRACE 008 cache worker inspected segment 8; no application state changed.\nTRACE 009 cache worker inspected segment 9; no application state changed.\nTRACE 010 cache worker inspected segment 10; no application state changed.\nTRACE 011 cache worker inspected segment 11; no application state changed.\nTRACE 012 cache worker inspected segment 12; no application state changed.\nTRACE 013 cache worker inspected segment 13; no application state changed.\nTRACE 014 cache worker inspected segment 14; no application state changed.\nTRACE 015 cache worker inspected segment 15; no application state changed.\nTRACE 016 cache worker inspected segment 16; no application state changed.\nTRACE 017 cache worker inspected segment 17; no application state changed.\nTRACE 018 cache worker inspected segment 18; no application state changed.\nTRACE 019 cache worker inspected segment 19; no application state changed.\nTRACE 020 cache worker inspected segment 20; no application state changed.\nTRACE 021 cache worker inspected segment 21; no application state changed.\nTRACE 022 cache worker inspected segment 22; no application state changed.\nTRACE 023 cache worker inspected segment 23; no application state changed.\nTRACE 024 cache worker inspected segment 24; no application state changed.\nTRACE 025 cache worker inspected segment 25; no application state changed.\nTRACE 026 cache worker inspected segment 26; no application state changed.\nTRACE 027 cache worker inspected segment 27; no application state changed.\nTRACE 028 cache worker inspected segment 28; no application state changed.\nTRACE 029 cache worker inspected segment 29; no application state changed.\nTRACE 030 cache worker inspected segment 30; no application state changed.\nTRACE 031 cache worker inspected segment 31; no application state changed.\nTRACE 032 cache worker inspected segment 32; no application state changed.\nTRACE 033 cache worker inspected segment 33; no application state changed.\nTRACE 034 cache worker inspected segment 34; no application state changed.\nTRACE 035 cache worker inspected segment 35; no application state changed.\nTRACE 036 cache worker inspected segment 36; no application state changed.\nTRACE 037 cache worker inspected segment 37; no application state changed.\nTRACE 038 cache worker inspected segment 38; no application state changed.\nTRACE 039 cache worker inspected segment 39; no application state changed.\nTRACE 040 cache worker inspected segment 40; no application state changed.\nTRACE 041 cache worker inspected segment 41; no application state changed.\nTRACE 042 cache worker inspected segment 42; no application state changed.\nTRACE 043 cache worker inspected segment 43; no application state changed.\nTRACE 044 cache worker inspected segment 44; no application state changed.\nTRACE 045 cache worker inspected segment 45; no application state changed.\nTRACE 046 cache worker inspected segment 46; no application state changed.\nTRACE 047 cache worker inspected segment 47; no application state changed.\nTRACE 048 cache worker inspected segment 48; no application state changed.\nTRACE 049 cache worker inspected segment 49; no application state changed.\nTRACE 050 cache worker inspected segment 50; no application state changed.\nTRACE 051 cache worker inspected segment 51; no application state changed.\nTRACE 052 cache worker inspected segment 52; no application state changed.\nTRACE 053 cache worker inspected segment 53; no application state changed.\nTRACE 054 cache worker inspected segment 54; no application state changed.\nTRACE 055 cache worker inspected segment 55; no application state changed.\nTRACE 056 cache worker inspected segment 56; no application state changed.\nTRACE 057 cache worker inspected segment 57; no application state changed.\nTRACE 058 cache worker inspected segment 58; no application state changed.\nTRACE 059 cache worker inspected segment 59; no application state changed.\nTRACE 060 cache worker inspected segment 60; no application state changed.\nTRACE 061 cache worker inspected segment 61; no application state changed.\nTRACE 062 cache worker inspected segment 62; no application state changed.\nTRACE 063 cache worker inspected segment 63; no application state changed.\nTRACE 064 cache worker inspected segment 64; no application state changed.\nTRACE 065 cache worker inspected segment 65; no application state changed.\nTRACE 066 cache worker inspected segment 66; no application state changed.\nTRACE 067 cache worker inspected segment 67; no application state changed.\nTRACE 068 cache worker inspected segment 68; no application state changed.\nTRACE 069 cache worker inspected segment 69; no application state changed.\nTRACE 070 cache worker inspected segment 70; no application state changed.\nTRACE 071 cache worker inspected segment 71; no application state changed.\nTRACE 072 cache worker inspected segment 72; no application state changed.\nTRACE 073 cache worker inspected segment 73; no application state changed.\nTRACE 074 cache worker inspected segment 74; no application state changed.\nTRACE 075 cache worker inspected segment 75; no application state changed.\nTRACE 076 cache worker inspected segment 76; no application state changed.\nTRACE 077 cache worker inspected segment 77; no application state changed.\nTRACE 078 cache worker inspected segment 78; no application state changed.\nTRACE 079 cache worker inspected segment 79; no application state changed.\nTRACE 080 cache worker inspected segment 80; no application state changed.\nTRACE 081 cache worker inspected segment 81; no application state changed.\nTRACE 082 cache worker inspected segment 82; no application state changed.\nTRACE 083 cache worker inspected segment 83; no application state changed.\nTRACE 084 cache worker inspected segment 84; no application state changed.\nTRACE 085 cache worker inspected segment 85; no application state changed.\nTRACE 086 cache worker inspected segment 86; no application state changed.\nTRACE 087 cache worker inspected segment 87; no application state changed.\nTRACE 088 cache worker inspected segment 88; no application state changed.\nTRACE 089 cache worker inspected segment 89; no application state changed.\nTRACE 090 cache worker inspected segment 90; no application state changed.\nTRACE 091 cache worker inspected segment 91; no application state changed.\nTRACE 092 cache worker inspected segment 92; no application state changed.\nTRACE 093 cache worker inspected segment 93; no application state changed.\nTRACE 094 cache worker inspected segment 94; no application state changed.\nTRACE 095 cache worker inspected segment 95; no application state changed.\nTRACE 096 cache worker inspected segment 96; no application state changed.\nTRACE 097 cache worker inspected segment 97; no application state changed.\nTRACE 098 cache worker inspected segment 98; no application state changed.\nTRACE 099 cache worker inspected segment 99; no application state changed.\nTRACE 100 cache worker inspected segment 100; no application state changed.\nTRACE 101 cache worker inspected segment 101; no application state changed.\nTRACE 102 cache worker inspected segment 102; no application state changed.\nTRACE 103 cache worker inspected segment 103; no application state changed.\nTRACE 104 cache worker inspected segment 104; no application state changed.\nTRACE 105 cache worker inspected segment 105; no application state changed.\nTRACE 106 cache worker inspected segment 106; no application state changed.\nTRACE 107 cache worker inspected segment 107; no application state changed.\nTRACE 108 cache worker inspected segment 108; no application state changed.\nTRACE 109 cache worker inspected segment 109; no application state changed.\nTRACE 110 cache worker inspected segment 110; no application state changed.\nTRACE 111 cache worker inspected segment 111; no application state changed.\nTRACE 112 cache worker inspected segment 112; no application state changed.\nTRACE 113 cache worker inspected segment 113; no application state changed.\nTRACE 114 cache worker inspected segment 114; no application state changed.\nTRACE 115 cache worker inspected segment 115; no application state changed.\nTRACE 116 cache worker inspected segment 116; no application state changed.\nTRACE 117 cache worker inspected segment 117; no application state changed.\nTRACE 118 cache worker inspected segment 118; no application state changed.\nTRACE 119 cache worker inspected segment 119; no application state changed.\nTRACE 120 cache worker inspected segment 120; no application state changed.\nTRACE 121 cache worker inspected segment 121; no application state changed.\nTRACE 122 cache worker inspected segment 122; no application state changed.\nTRACE 123 cache worker inspected segment 123; no application state changed.\nTRACE 124 cache worker inspected segment 124; no application state changed.\nTRACE 125 cache worker inspected segment 125; no application state changed.\nTRACE 126 cache worker inspected segment 126; no application state changed.\nTRACE 127 cache worker inspected segment 127; no application state changed.\nTRACE 128 cache worker inspected segment 128; no application state changed.\nTRACE 129 cache worker inspected segment 129; no application state changed.\nTRACE 130 cache worker inspected segment 130; no application state changed.\nTRACE 131 cache worker inspected segment 131; no application state changed.\nTRACE 132 cache worker inspected segment 132; no application state changed.\nTRACE 133 cache worker inspected segment 133; no application state changed.\nTRACE 134 cache worker inspected segment 134; no application state changed.\nTRACE 135 cache worker inspected segment 135; no application state changed.\nTRACE 136 cache worker inspected segment 136; no application state changed.\nTRACE 137 cache worker inspected segment 137; no application state changed.\nTRACE 138 cache worker inspected segment 138; no application state changed.\nTRACE 139 cache worker inspected segment 139; no application state changed.\nTRACE 140 cache worker inspected segment 140; no application state changed.\nTRACE 141 cache worker inspected segment 141; no application state changed.\nTRACE 142 cache worker inspected segment 142; no application state changed.\nTRACE 143 cache worker inspected segment 143; no application state changed.\nTRACE 144 cache worker inspected segment 144; no application state changed.\nTRACE 145 cache worker inspected segment 145; no application state changed.\nTRACE 146 cache worker inspected segment 146; no application state changed.\nTRACE 147 cache worker inspected segment 147; no application state changed.\nTRACE 148 cache worker inspected segment 148; no application state changed.\nTRACE 149 cache worker inspected segment 149; no application state changed.",
+          "final_status": "recovered"
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Help me plan a hotel stay. I need step-free access, breakfast included, and free cancellation, with a maximum total of $300. Save those requirements in {WORKSPACE}/planning_brief.json using max_total_usd, step_free, breakfast_included, and free_cancellation.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "max_total_usd",
+          "expected": 300
+        },
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "step_free",
+          "expected": true
+        },
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "breakfast_included",
+          "expected": true
+        },
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "free_cancellation",
+          "expected": true
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/planning_brief.json",
+              "content": "{\n  \"max_total_usd\": 300,\n  \"step_free\": true,\n  \"breakfast_included\": true,\n  \"free_cancellation\": true\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "While we wait for the offers, put the dates 2026-12-04 and 2026-12-07 in travel_dates.json with arrival and departure fields.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "travel_dates.json",
+          "json_path": "arrival",
+          "expected": "2026-12-04"
+        },
+        {
+          "type": "json_equals",
+          "path": "travel_dates.json",
+          "json_path": "departure",
+          "expected": "2026-12-07"
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/planning_brief.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/travel_dates.json",
+              "content": "{\n  \"arrival\": \"2026-12-04\",\n  \"departure\": \"2026-12-07\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "The booking helper had a warning. Fetch its diagnostic log and save its incident_id and final_status in helper_status.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "helper_status.json",
+          "json_path": "incident_id",
+          "expected": "DIAG-3"
+        },
+        {
+          "type": "json_equals",
+          "path": "helper_status.json",
+          "json_path": "final_status",
+          "expected": "recovered"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "booking_diagnostics"
+        }
+      ],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/planning_brief.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/travel_dates.json"
+            }
+          },
+          {
+            "tool": "booking_diagnostics",
+            "arguments": {}
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/helper_status.json",
+              "content": "{\n  \"incident_id\": \"DIAG-3\",\n  \"final_status\": \"recovered\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 4,
+      "prompt": "I can raise the total hotel budget to $360. Please update the planning brief.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "max_total_usd",
+          "expected": 360
+        },
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "step_free",
+          "expected": true
+        },
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "breakfast_included",
+          "expected": true
+        },
+        {
+          "type": "json_equals",
+          "path": "planning_brief.json",
+          "json_path": "free_cancellation",
+          "expected": true
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/planning_brief.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/travel_dates.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/helper_status.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/planning_brief.json",
+              "content": "{\n  \"max_total_usd\": 360,\n  \"step_free\": true,\n  \"breakfast_included\": true,\n  \"free_cancellation\": true\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 5,
+      "prompt": "The offers are now in hotels.json. Save all the IDs that meet my requirements in shortlist.json as a JSON array.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "shortlist.json",
+          "expected": [
+            "H1"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "hotels.json",
+          "content": "[\n  {\n    \"id\": \"H1\",\n    \"total_usd\": 350,\n    \"step_free\": true,\n    \"breakfast_included\": true,\n    \"free_cancellation\": true\n  },\n  {\n    \"id\": \"H2\",\n    \"total_usd\": 320,\n    \"step_free\": false,\n    \"breakfast_included\": true,\n    \"free_cancellation\": true\n  },\n  {\n    \"id\": \"H3\",\n    \"total_usd\": 300,\n    \"step_free\": true,\n    \"breakfast_included\": false,\n    \"free_cancellation\": true\n  },\n  {\n    \"id\": \"H4\",\n    \"total_usd\": 280,\n    \"step_free\": true,\n    \"breakfast_included\": true,\n    \"free_cancellation\": false\n  },\n  {\n    \"id\": \"H5\",\n    \"total_usd\": 370,\n    \"step_free\": true,\n    \"breakfast_included\": true,\n    \"free_cancellation\": true\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

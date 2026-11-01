@@ -1,88 +1,79 @@
 {
   "id": "scen_08_external_disk_mutation",
-  "name": "Scenario 8: Detecting External Disk Edit Over In-Context History",
-  "property_tested": "Linearizability / Monotonic Reads (Re-reading mutated disk state)",
+  "name": "Prepare a deployment manifest after configuration changes",
+  "property_tested": "External-state freshness; preservation of unrelated settings",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Write `TARGET_ENV=staging` into `{WORKSPACE}/deploy_env.txt`.",
+      "prompt": "Our deployment settings are in {WORKSPACE}/deploy_env.txt. Please prepare manifest.json with target_env set to the selected environment. This is just preparation, not a deployment.",
       "state_checks": [
         {
-          "type": "file_contains",
+          "type": "json_equals",
+          "path": "manifest.json",
+          "json_path": "target_env",
+          "expected": "staging"
+        },
+        {
+          "type": "file_exact_lines",
           "path": "deploy_env.txt",
-          "expected": "TARGET_ENV=staging"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "staging"
+          "expected": [
+            "TARGET_ENV=staging"
           ]
         }
-      ]
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "deploy_env.txt",
+          "content": "TARGET_ENV=staging\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/deploy_env.txt"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/manifest.json",
+              "content": "{\n  \"target_env\": \"staging\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 2,
-      "prompt": "An external script just modified `{WORKSPACE}/deploy_env.txt` on disk. Read the file right now (do not guess from chat history) and tell me the current `TARGET_ENV`.",
+      "prompt": "The release team has updated the deployment settings. Refresh the manifest for the release review.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "manifest.json",
+          "json_path": "target_env",
+          "expected": "production"
+        },
+        {
+          "type": "file_exact_lines",
+          "path": "deploy_env.txt",
+          "expected": [
+            "TARGET_ENV=production"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
           "path": "deploy_env.txt",
           "content": "TARGET_ENV=production\n"
-        }
-      ],
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "deploy_env.txt",
-          "expected": "TARGET_ENV=production"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "production"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Write `{\"deployed_to\": \"<current_env>\"}` into `{WORKSPACE}/manifest.json` using the verified environment from Turn 2.",
-      "state_checks": [
-        {
-          "type": "json_path_equals",
-          "path": "manifest.json",
-          "json_path": "deployed_to",
-          "expected": "production"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "production"
-          ]
         }
       ]
     }

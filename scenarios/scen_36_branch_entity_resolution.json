@@ -1,0 +1,34 @@
+{
+  "id": "scen_36_branch_entity_resolution",
+  "name": "Match opening hours to the right branch",
+  "property_tested": "Entity identity across sources",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Which branches of Lantern Cafe are open at 21:00 on Wednesday? Match the saved address and hours records in {WORKSPACE}; several branches share the same name. Save the matching branch IDs in open_branches.json as a JSON array.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "open_branches.json",
+          "expected": [
+            "L2"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "branches.json",
+          "content": "[\n  {\n    \"branch_id\": \"L1\",\n    \"name\": \"Lantern Cafe\",\n    \"address\": \"10 River St\"\n  },\n  {\n    \"branch_id\": \"L2\",\n    \"name\": \"Lantern Cafe\",\n    \"address\": \"42 Hill Rd\"\n  },\n  {\n    \"branch_id\": \"B1\",\n    \"name\": \"Lantern Bakery\",\n    \"address\": \"9 Dock St\"\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "hours.json",
+          "content": "[\n  {\n    \"name\": \"Lantern Cafe\",\n    \"address\": \"42 Hill Rd\",\n    \"day\": \"Wednesday\",\n    \"opens\": \"09:00\",\n    \"closes\": \"22:00\"\n  },\n  {\n    \"name\": \"Lantern Cafe\",\n    \"address\": \"10 River St\",\n    \"day\": \"Wednesday\",\n    \"opens\": \"08:00\",\n    \"closes\": \"20:00\"\n  },\n  {\n    \"name\": \"Lantern Bakery\",\n    \"address\": \"9 Dock St\",\n    \"day\": \"Wednesday\",\n    \"opens\": \"07:00\",\n    \"closes\": \"23:00\"\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

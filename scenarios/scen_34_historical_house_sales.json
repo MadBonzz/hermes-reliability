@@ -1,0 +1,34 @@
+{
+  "id": "scen_34_historical_house_sales",
+  "name": "Find a historical sale rather than a current listing",
+  "property_tested": "Temporal filtering; record status and entity selection",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "What was the least expensive completed sale of a detached house in Northbank during January 2025? The council's export is {WORKSPACE}/sales.json. Save sale_id and price_usd in answer.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "answer.json",
+          "json_path": "sale_id",
+          "expected": "S4"
+        },
+        {
+          "type": "json_equals",
+          "path": "answer.json",
+          "json_path": "price_usd",
+          "expected": 410000
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "sales.json",
+          "content": "[\n  {\n    \"sale_id\": \"S1\",\n    \"area\": \"Northbank\",\n    \"type\": \"detached\",\n    \"status\": \"listed\",\n    \"date\": \"2025-01-12\",\n    \"price_usd\": 300000\n  },\n  {\n    \"sale_id\": \"S2\",\n    \"area\": \"Northbank\",\n    \"type\": \"apartment\",\n    \"status\": \"completed\",\n    \"date\": \"2025-01-18\",\n    \"price_usd\": 220000\n  },\n  {\n    \"sale_id\": \"S3\",\n    \"area\": \"Northbank\",\n    \"type\": \"detached\",\n    \"status\": \"completed\",\n    \"date\": \"2024-12-31\",\n    \"price_usd\": 390000\n  },\n  {\n    \"sale_id\": \"S4\",\n    \"area\": \"Northbank\",\n    \"type\": \"detached\",\n    \"status\": \"completed\",\n    \"date\": \"2025-01-22\",\n    \"price_usd\": 410000\n  },\n  {\n    \"sale_id\": \"S5\",\n    \"area\": \"Southbank\",\n    \"type\": \"detached\",\n    \"status\": \"completed\",\n    \"date\": \"2025-01-25\",\n    \"price_usd\": 280000\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

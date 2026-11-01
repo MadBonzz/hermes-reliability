@@ -5,7 +5,21 @@ import json
 import re
 from pathlib import Path
 
+from .mock_services import json_equal
+
 DEFAULT_SUITE_NAME = "Hermes Agent Software & Distributed Systems Suite"
+
+
+def external_schema_ref(value):
+    """Detect non-local references without resolving or fetching schema content."""
+    if isinstance(value, list):
+        return any(external_schema_ref(v) for v in value)
+    if isinstance(value, dict):
+        ref = value.get("$ref")
+        return (isinstance(ref, str) and not ref.startswith("#")) or any(
+            external_schema_ref(v) for v in value.values()
+        )
+    return False
 
 
 def load_scenarios(source, schema_path, suite_name=DEFAULT_SUITE_NAME):
@@ -86,14 +100,73 @@ def _validate_scenario(scenario, validator, seen):
     names = [m["name"] for m in scenario.get("mock_tools", [])]
     if len(names) != len(set(names)):
         raise ValueError(f"{sid}: duplicate mock names")
+    services = {}
+    import jsonschema
+
+    for mock in scenario.get("mock_tools", []):
+        behavior = mock["behavior"]
+        parameters = mock["parameters"]
+        try:
+            jsonschema.Draft7Validator.check_schema(parameters)
+        except jsonschema.SchemaError as exc:
+            raise ValueError(f"{sid}: invalid tool parameter schema: {exc.message}") from exc
+        if parameters.get("type") != "object":
+            raise ValueError(f"{sid}: tool arguments must be an object")
+        if behavior["type"] != "stateful_service":
+            continue
+        service = behavior["service"]
+        services.setdefault(service, None)
+        if "initial_state" in behavior:
+            initial = behavior["initial_state"]
+            if services[service] is not None and not json_equal(services[service], initial):
+                raise ValueError(f"{sid}: conflicting initial state for {service}")
+            services[service] = initial
+        field = behavior.get("idempotency_field") or behavior.get("lookup_arg")
+        if field and (
+            field not in parameters.get("required", [])
+            or parameters.get("properties", {}).get(field, {}).get("type") != "string"
+        ):
+            raise ValueError(f"{sid}: {field} must be a required string argument")
+        if behavior["operation"] == "compare_and_swap":
+            if (
+                "expected_version" not in parameters.get("required", [])
+                or parameters.get("properties", {}).get("expected_version", {}).get("type")
+                != "integer"
+            ):
+                raise ValueError(f"{sid}: compare_and_swap requires expected_version")
+        for field_name in ("return_payload", "failure_response", "rejection"):
+            if field_name in behavior and not isinstance(behavior[field_name], dict):
+                raise ValueError(f"{sid}: service {field_name} must be an object")
+    for mock in scenario.get("mock_tools", []):
+        behavior = mock["behavior"]
+        if behavior.get("operation") == "compare_and_swap":
+            initial = services.get(behavior["service"]) or {}
+            if type(initial.get("version")) is not int:
+                raise ValueError(f"{sid}: compare_and_swap needs an initial integer version")
     paths = [
         m["behavior"]["target_file"]
         for m in scenario.get("mock_tools", [])
         if "target_file" in m["behavior"]
     ]
     for turn in turns:
+        reference = turn.get("reference")
+        if reference:
+            allowed_reference = {
+                "read_file",
+                "write_file",
+                "patch",
+                "search_files",
+                "terminal",
+                *names,
+            }
+            for action in reference["actions"]:
+                if action["tool"] not in allowed_reference:
+                    raise ValueError(f"{sid}: unknown reference tool {action['tool']}")
         for group in ("state_checks", "pre_turn_perturbations", "post_turn_cleanup"):
             paths += [c["path"] for c in turn.get(group, []) if "path" in c]
+            for entry in turn.get(group, []):
+                if entry["type"] == "set_mock_state" and entry["service"] not in services:
+                    raise ValueError(f"{sid}: unknown mock service {entry['service']}")
     for path in paths:
         clean = path.replace("{WORKSPACE}/", "").replace("{WORKSPACE}\\", "").replace("\\", "/")
         if not clean or clean.startswith("/") or ":" in clean or ".." in clean.split("/"):

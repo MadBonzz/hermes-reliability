@@ -1,0 +1,106 @@
+{
+  "id": "scen_64_log_rotation",
+  "name": "Keep an active log within its retention limit",
+  "property_tested": "Bounded storage; lossless ordered log rotation",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Add events E5, E6, and E7 to the logs in {WORKSPACE}, one event per line. Our policy keeps the newest five events in active.log and older events in archive.log; the full history matters.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "active.log",
+          "expected": [
+            "E3",
+            "E4",
+            "E5",
+            "E6",
+            "E7"
+          ]
+        },
+        {
+          "type": "file_exact_lines",
+          "path": "archive.log",
+          "expected": [
+            "E1",
+            "E2"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "active.log",
+          "content": "E1\nE2\nE3\nE4\n"
+        },
+        {
+          "type": "write_file",
+          "path": "archive.log",
+          "content": ""
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/active.log"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/archive.log"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/active.log",
+              "content": "E3\nE4\nE5\nE6\nE7\n"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/archive.log",
+              "content": "E1\nE2\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Two more events arrived: E8 and E9. Add them under the same retention policy.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "active.log",
+          "expected": [
+            "E5",
+            "E6",
+            "E7",
+            "E8",
+            "E9"
+          ]
+        },
+        {
+          "type": "file_exact_lines",
+          "path": "archive.log",
+          "expected": [
+            "E1",
+            "E2",
+            "E3",
+            "E4"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

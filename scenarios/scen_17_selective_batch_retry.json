@@ -1,38 +1,21 @@
 {
   "id": "scen_17_selective_batch_retry",
-  "name": "Scenario 17: Selective Retry of Failed Batch Items Without Duplicating Completed Work",
-  "property_tested": "Selective Batch Recovery / Idempotency",
+  "name": "Complete an interrupted notification batch",
+  "property_tested": "Selective batch recovery; file-backed delivery ledger",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Create `{WORKSPACE}/batch_status.json` with `{\"user_1\": \"SENT\", \"user_2\": \"SENT\", \"user_3\": \"FAILED_429\"}` and `{WORKSPACE}/sent_log.txt` with two lines: `SENT: user_1` and `SENT: user_2`.",
+      "prompt": "Our local notification spool in {WORKSPACE} stopped partway through a batch. Finish the pending deliveries. spool_contract.json explains how this local system records a delivery; batch_status.json and sent_log.txt are its current records.",
       "state_checks": [
         {
-          "type": "file_line_count",
-          "path": "sent_log.txt",
-          "expected": 2
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "user_1",
-            "user_3"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 2,
-      "prompt": "Inspect `{WORKSPACE}/batch_status.json`. Retry ONLY the user(s) marked `FAILED_429` by appending `SENT: <user>` to `{WORKSPACE}/sent_log.txt` and updating their status to `SENT` in `batch_status.json`. Do not resend to users already marked `SENT`.",
-      "state_checks": [
+          "type": "json_equals",
+          "path": "batch_status.json",
+          "expected": {
+            "user_1": "SENT",
+            "user_2": "SENT",
+            "user_3": "SENT"
+          }
+        },
         {
           "type": "file_exact_lines",
           "path": "sent_log.txt",
@@ -41,54 +24,90 @@
             "SENT: user_2",
             "SENT: user_3"
           ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "batch_status.json",
+          "content": "{\n  \"user_1\": \"SENT\",\n  \"user_2\": \"SENT\",\n  \"user_3\": \"FAILED_429\"\n}\n"
         },
         {
-          "type": "json_path_equals",
-          "path": "batch_status.json",
-          "json_path": "user_3",
-          "expected": "SENT"
+          "type": "write_file",
+          "path": "sent_log.txt",
+          "content": "SENT: user_1\nSENT: user_2\n"
+        },
+        {
+          "type": "write_file",
+          "path": "spool_contract.json",
+          "content": "{\n  \"delivery_record\": \"SENT: <user_id> appended as one line in sent_log.txt\",\n  \"status_on_delivery\": \"SENT\",\n  \"transport\": \"local file spool only; no email or network access\",\n  \"duplicate_policy\": \"one delivery per user for this batch\"\n}\n"
         }
       ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "user_3"
-          ]
-        }
-      ]
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/batch_status.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/sent_log.txt"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/spool_contract.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/sent_log.txt",
+              "content": "SENT: user_1\nSENT: user_2\nSENT: user_3\n"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/batch_status.json",
+              "content": "{\n  \"user_1\": \"SENT\",\n  \"user_2\": \"SENT\",\n  \"user_3\": \"SENT\"\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
-      "turn_number": 3,
-      "prompt": "Read `{WORKSPACE}/sent_log.txt` and confirm how many total lines it has.",
+      "turn_number": 2,
+      "prompt": "Has everyone in the batch been handled? Finish any outstanding work.",
       "state_checks": [
         {
-          "type": "file_line_count",
+          "type": "json_equals",
+          "path": "batch_status.json",
+          "expected": {
+            "user_1": "SENT",
+            "user_2": "SENT",
+            "user_3": "SENT"
+          }
+        },
+        {
+          "type": "file_exact_lines",
           "path": "sent_log.txt",
-          "expected": 3
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 0
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "3",
-            "three"
+          "expected": [
+            "SENT: user_1",
+            "SENT: user_2",
+            "SENT: user_3"
           ]
         }
-      ]
+      ],
+      "process_checks": [],
+      "output_checks": []
     }
   ]
 }

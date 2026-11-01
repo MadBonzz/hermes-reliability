@@ -1,0 +1,48 @@
+{
+  "id": "scen_38_duplicate_transaction_sources",
+  "name": "Combine overlapping expense exports",
+  "property_tested": "Deduplication by identity; legitimate equal-valued records",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please combine the two bank exports in {WORKSPACE} into expenses.json, keeping each transaction once. Transaction IDs are stable across exports; separate transactions can have identical dates and amounts. Use an array of objects with only id, date, and amount_usd.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "expenses.json",
+          "expected": [
+            {
+              "id": "T1",
+              "date": "2026-10-01",
+              "amount_usd": 20
+            },
+            {
+              "id": "T2",
+              "date": "2026-10-02",
+              "amount_usd": 30
+            },
+            {
+              "id": "T3",
+              "date": "2026-10-02",
+              "amount_usd": 30
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "bank_a.json",
+          "content": "[\n  {\n    \"id\": \"T1\",\n    \"date\": \"2026-10-01\",\n    \"amount_usd\": 20\n  },\n  {\n    \"id\": \"T2\",\n    \"date\": \"2026-10-02\",\n    \"amount_usd\": 30\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "bank_b.json",
+          "content": "[\n  {\n    \"id\": \"T2\",\n    \"date\": \"2026-10-02\",\n    \"amount_usd\": 30\n  },\n  {\n    \"id\": \"T3\",\n    \"date\": \"2026-10-02\",\n    \"amount_usd\": 30\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

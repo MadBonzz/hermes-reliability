@@ -1,0 +1,98 @@
+{
+  "id": "v2_scen_16_causal_event_ordering",
+  "name": "Reconstruct a delivery timeline from unordered events",
+  "property_tested": "Chronological event ordering; not causal-consistency verification",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "The delivery service's event export is {WORKSPACE}/events.json. The ts values are authoritative UTC event times. Please put the current delivery state in latest_state.txt.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "latest_state.txt",
+          "expected": [
+            "DELIVERED"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "events.json",
+          "content": "[\n  {\n    \"ts\": \"2026-10-16T15:00:00Z\",\n    \"state\": \"DELIVERED\"\n  },\n  {\n    \"ts\": \"2026-10-16T09:00:00Z\",\n    \"state\": \"CREATED\"\n  },\n  {\n    \"ts\": \"2026-10-16T12:00:00Z\",\n    \"state\": \"IN_TRANSIT\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/events.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/latest_state.txt",
+              "content": "DELIVERED\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "For the customer support record, put the state history from earliest to latest in ordered_timeline.txt, one state per line.",
+      "state_checks": [
+        {
+          "type": "file_exact_lines",
+          "path": "ordered_timeline.txt",
+          "expected": [
+            "CREATED",
+            "IN_TRANSIT",
+            "DELIVERED"
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "events.json",
+          "expected": [
+            {
+              "ts": "2026-10-16T15:00:00Z",
+              "state": "DELIVERED"
+            },
+            {
+              "ts": "2026-10-16T09:00:00Z",
+              "state": "CREATED"
+            },
+            {
+              "ts": "2026-10-16T12:00:00Z",
+              "state": "IN_TRANSIT"
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Chronological event ordering",
+    "turns": 2,
+    "input_files": 1,
+    "services": 0,
+    "records": 3,
+    "dependency_depth": 2,
+    "fault_types": [
+      "out_of_order_events"
+    ],
+    "interaction": "artifact_edit",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 3
+  }
+}

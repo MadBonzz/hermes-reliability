@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import httpx
 
-from src.api_trace import APITrace, SecretRedactor
+from src.api_trace import APITrace, RequestPacer, SecretRedactor
 from tests.helpers import TemporaryDirectoryTestCase
 
 
@@ -26,6 +26,28 @@ class AsyncChunks(httpx.AsyncByteStream):
 
 
 class APITraceTests(TemporaryDirectoryTestCase):
+    def test_pacer_spaces_dispatches_across_scenarios(self):
+        pacer = RequestPacer(7)
+        with patch("src.api_trace.time.monotonic", side_effect=[100, 102, 118]):
+            self.assertEqual(0, pacer.reserve())
+            self.assertEqual(5, pacer.reserve())
+            self.assertEqual(0, pacer.reserve())
+
+    def test_pacing_keeps_request_and_response_evidence(self):
+        trace = self.recorder()
+        trace.pacer = type("Pacer", (), {"reserve": lambda self: 0.1})()
+        with patch("src.api_trace.time.sleep") as wait, trace:
+            client = httpx.Client(
+                transport=httpx.MockTransport(
+                    lambda request: httpx.Response(200, json={"choices": []})
+                )
+            )
+            with client:
+                client.post("https://example.test/v1/chat/completions", json={"messages": []})
+            wait.assert_called_once_with(0.1)
+        self.assertEqual(1, trace.requests)
+        self.assertTrue(any(e["event"] == "api_dispatch_wait" for e in self.events()))
+
     def recorder(self):
         return APITrace(
             self.root / "api.jsonl",

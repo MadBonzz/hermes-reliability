@@ -1,0 +1,258 @@
+{
+  "id": "v2_scen_102_customer_retirement_10_files_one_turn",
+  "name": "Customer Retirement across 10 files and one turn",
+  "property_tested": "customer_retirement",
+  "benchmark_version": 2,
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Remove customer U1 from {WORKSPACE}/customers.json. Our retention policy keeps their orders under the existing ARCHIVE customer. Apply that change across every regional register in orders. Preserve other customers and all order details.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "customers.json",
+          "expected": [
+            {
+              "id": "U2",
+              "name": "Active customer"
+            },
+            {
+              "id": "ARCHIVE",
+              "name": "Retained accounts"
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_1.json",
+          "expected": [
+            {
+              "id": "O1A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 10,
+              "fulfilled": true
+            },
+            {
+              "id": "O1B",
+              "customer_id": "U2",
+              "amount_usd": 11,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_2.json",
+          "expected": [
+            {
+              "id": "O2A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 20,
+              "fulfilled": true
+            },
+            {
+              "id": "O2B",
+              "customer_id": "U2",
+              "amount_usd": 22,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_3.json",
+          "expected": [
+            {
+              "id": "O3A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 30,
+              "fulfilled": true
+            },
+            {
+              "id": "O3B",
+              "customer_id": "U2",
+              "amount_usd": 33,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_4.json",
+          "expected": [
+            {
+              "id": "O4A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 40,
+              "fulfilled": true
+            },
+            {
+              "id": "O4B",
+              "customer_id": "U2",
+              "amount_usd": 44,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_5.json",
+          "expected": [
+            {
+              "id": "O5A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 50,
+              "fulfilled": true
+            },
+            {
+              "id": "O5B",
+              "customer_id": "U2",
+              "amount_usd": 55,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_6.json",
+          "expected": [
+            {
+              "id": "O6A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 60,
+              "fulfilled": true
+            },
+            {
+              "id": "O6B",
+              "customer_id": "U2",
+              "amount_usd": 66,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_7.json",
+          "expected": [
+            {
+              "id": "O7A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 70,
+              "fulfilled": true
+            },
+            {
+              "id": "O7B",
+              "customer_id": "U2",
+              "amount_usd": 77,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_8.json",
+          "expected": [
+            {
+              "id": "O8A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 80,
+              "fulfilled": true
+            },
+            {
+              "id": "O8B",
+              "customer_id": "U2",
+              "amount_usd": 88,
+              "fulfilled": false
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders/region_9.json",
+          "expected": [
+            {
+              "id": "O9A",
+              "customer_id": "ARCHIVE",
+              "amount_usd": 90,
+              "fulfilled": true
+            },
+            {
+              "id": "O9B",
+              "customer_id": "U2",
+              "amount_usd": 99,
+              "fulfilled": false
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "customers.json",
+          "content": "[\n  {\n    \"id\": \"U1\",\n    \"name\": \"Retiring customer\"\n  },\n  {\n    \"id\": \"U2\",\n    \"name\": \"Active customer\"\n  },\n  {\n    \"id\": \"ARCHIVE\",\n    \"name\": \"Retained accounts\"\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_1.json",
+          "content": "[\n  {\n    \"id\": \"O1A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 10,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O1B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 11,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_2.json",
+          "content": "[\n  {\n    \"id\": \"O2A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 20,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O2B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 22,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_3.json",
+          "content": "[\n  {\n    \"id\": \"O3A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 30,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O3B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 33,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_4.json",
+          "content": "[\n  {\n    \"id\": \"O4A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 40,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O4B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 44,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_5.json",
+          "content": "[\n  {\n    \"id\": \"O5A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 50,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O5B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 55,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_6.json",
+          "content": "[\n  {\n    \"id\": \"O6A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 60,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O6B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 66,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_7.json",
+          "content": "[\n  {\n    \"id\": \"O7A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 70,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O7B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 77,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_8.json",
+          "content": "[\n  {\n    \"id\": \"O8A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 80,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O8B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 88,\n    \"fulfilled\": false\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders/region_9.json",
+          "content": "[\n  {\n    \"id\": \"O9A\",\n    \"customer_id\": \"U1\",\n    \"amount_usd\": 90,\n    \"fulfilled\": true\n  },\n  {\n    \"id\": \"O9B\",\n    \"customer_id\": \"U2\",\n    \"amount_usd\": 99,\n    \"fulfilled\": false\n  }\n]\n"
+        }
+      ]
+    }
+  ],
+  "complexity": {
+    "family": "customer_retirement",
+    "turns": 1,
+    "input_files": 10,
+    "services": 0,
+    "records": 21,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "artifact_edit",
+    "scale_level": 10,
+    "notes": "Matched resource-count panel. File count counts all input files, including policy. Scale changes the number of dependent records; inspect both dimensions.",
+    "fault_count": 0,
+    "asserted_file_paths": 10
+  }
+}

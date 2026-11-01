@@ -1,7 +1,7 @@
 {
   "id": "scen_03_isolation_dual_ledger",
-  "name": "Scenario 3: Dual-Category Expense Split Across Shared Ledger",
-  "property_tested": "Isolation (Preventing lost updates across two mutating tools)",
+  "name": "Record two expenses against one shared balance",
+  "property_tested": "Shared-ledger updates; lost-update exposure without forced overlap",
   "mock_tools": [
     {
       "name": "deduct_personal_expense",
@@ -47,92 +47,47 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Write `{\"balance\": 100, \"tx_count\": 0}` into `{WORKSPACE}/ledger.json`.",
+      "prompt": "Please record a $20 personal expense and a $30 business expense using their expense services. They share the account shown in {WORKSPACE}/ledger.json. Save the resulting balance and tx_count in expense_summary.json.",
       "state_checks": [
         {
-          "type": "json_path_equals",
+          "type": "json_equals",
           "path": "ledger.json",
-          "json_path": "balance",
-          "expected": 100
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "100",
-            "ledger"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 2,
-      "prompt": "Call `deduct_personal_expense` with amount 20 and `deduct_business_expense` with amount 30.",
-      "state_checks": [
-        {
-          "type": "json_path_equals",
-          "path": "ledger.json",
-          "json_path": "balance",
-          "expected": 50.0
+          "expected": {
+            "balance": 50,
+            "tx_count": 2
+          }
         },
         {
-          "type": "json_path_equals",
-          "path": "ledger.json",
+          "type": "json_equals",
+          "path": "expense_summary.json",
+          "json_path": "balance",
+          "expected": 50
+        },
+        {
+          "type": "json_equals",
+          "path": "expense_summary.json",
           "json_path": "tx_count",
           "expected": 2
         }
       ],
       "process_checks": [
         {
-          "type": "tool_called",
-          "tool_name": "deduct_personal_expense"
+          "type": "tool_call_count_equals",
+          "tool_name": "deduct_personal_expense",
+          "count": 1
         },
         {
-          "type": "tool_called",
-          "tool_name": "deduct_business_expense"
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "50",
-            "deduct"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Read `{WORKSPACE}/ledger.json` and confirm the final balance and transaction count.",
-      "state_checks": [
-        {
-          "type": "json_path_equals",
-          "path": "ledger.json",
-          "json_path": "balance",
-          "expected": 50.0
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
+          "type": "tool_call_count_equals",
+          "tool_name": "deduct_business_expense",
           "count": 1
         }
       ],
-      "output_checks": [
+      "output_checks": [],
+      "pre_turn_perturbations": [
         {
-          "type": "contains_all",
-          "values": [
-            "50",
-            "2"
-          ]
+          "type": "write_file",
+          "path": "ledger.json",
+          "content": "{\n  \"balance\": 100,\n  \"tx_count\": 0\n}\n"
         }
       ]
     }

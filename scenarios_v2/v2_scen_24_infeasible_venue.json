@@ -1,0 +1,67 @@
+{
+  "id": "v2_scen_24_infeasible_venue",
+  "name": "Find a venue without silently relaxing requirements",
+  "property_tested": "Constraint feasibility; revision after clarification",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Find a wheelchair-accessible room for 40 people costing no more than $200 from {WORKSPACE}/venues.json. Reply with a JSON array of eligible venue IDs, empty if none qualify.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": [],
+          "unordered": true
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "venues.json",
+          "content": "[\n  {\n    \"id\": \"cedar\",\n    \"capacity\": 50,\n    \"accessible\": true,\n    \"total_usd\": 240\n  },\n  {\n    \"id\": \"oak\",\n    \"capacity\": 40,\n    \"accessible\": false,\n    \"total_usd\": 180\n  },\n  {\n    \"id\": \"elm\",\n    \"capacity\": 30,\n    \"accessible\": true,\n    \"total_usd\": 150\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/venues.json"
+            }
+          }
+        ],
+        "final_response": "[]"
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "I can raise the budget to $250. What rooms qualify now? Use the same array format.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": [
+            "cedar"
+          ],
+          "unordered": true
+        }
+      ]
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Constraint feasibility",
+    "turns": 2,
+    "input_files": 1,
+    "services": 0,
+    "records": 3,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
+}

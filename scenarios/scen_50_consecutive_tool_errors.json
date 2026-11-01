@@ -1,0 +1,60 @@
+{
+  "id": "scen_50_consecutive_tool_errors",
+  "name": "Complete a lookup through a short service outage",
+  "property_tested": "Structured tool use under repeated errors; bounded retry recovery",
+  "mock_tools": [
+    {
+      "name": "get_tracking",
+      "description": "Get the tracking record for parcel PK-7. Temporary service errors do not indicate a missing parcel.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "tracking",
+        "operation": "read",
+        "initial_state": {
+          "status": "ready_for_pickup",
+          "location": "North depot"
+        },
+        "transient_failures": 3,
+        "failure_response": {
+          "status": "error",
+          "code": "TEMPORARY_UNAVAILABLE",
+          "retryable": true
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please get the confirmed tracking status for parcel PK-7 and save the service's status and location fields in {WORKSPACE}/tracking.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "tracking.json",
+          "json_path": "status",
+          "expected": "ready_for_pickup"
+        },
+        {
+          "type": "json_equals",
+          "path": "tracking.json",
+          "json_path": "location",
+          "expected": "North depot"
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "min_tool_call_count",
+          "tool_name": "get_tracking",
+          "count": 4
+        }
+      ],
+      "output_checks": []
+    }
+  ]
+}

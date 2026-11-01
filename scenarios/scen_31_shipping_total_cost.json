@@ -1,0 +1,34 @@
+{
+  "id": "scen_31_shipping_total_cost",
+  "name": "Compare delivery quotes on equal terms",
+  "property_tested": "Comparable total cost; units and deadline constraints",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Which carrier is cheapest for my parcel if it must arrive within five business days? The saved quotes in {WORKSPACE}/quotes.json include mandatory surcharges separately. Please put carrier and total_usd in shipping_choice.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "shipping_choice.json",
+          "json_path": "carrier",
+          "expected": "Beacon"
+        },
+        {
+          "type": "json_equals",
+          "path": "shipping_choice.json",
+          "json_path": "total_usd",
+          "expected": 29
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "quotes.json",
+          "content": "[\n  {\n    \"carrier\": \"Arrow\",\n    \"base_usd\": 22,\n    \"fuel_usd\": 5,\n    \"handling_usd\": 6,\n    \"business_days\": 4\n  },\n  {\n    \"carrier\": \"Beacon\",\n    \"base_usd\": 26,\n    \"fuel_usd\": 3,\n    \"handling_usd\": 0,\n    \"business_days\": 5\n  },\n  {\n    \"carrier\": \"Coast\",\n    \"base_usd\": 18,\n    \"fuel_usd\": 2,\n    \"handling_usd\": 0,\n    \"business_days\": 7\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

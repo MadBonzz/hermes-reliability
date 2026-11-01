@@ -1,0 +1,126 @@
+{
+  "id": "v2_scen_51_pending_report_poll",
+  "name": "Finish an export whose receipt precedes its result",
+  "property_tested": "Asynchronous completion; delayed result visibility without duplicate submission",
+  "mock_tools": [
+    {
+      "name": "start_attendance_export",
+      "description": "Start the monthly export. Returns an accepted job receipt; get_attendance_export retrieves the eventual report.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "export",
+        "operation": "transition",
+        "initial_state": {
+          "started": false,
+          "report": {
+            "attendees": 42,
+            "month": "2026-09"
+          },
+          "status": "complete"
+        },
+        "requires": {
+          "started": false
+        },
+        "updates": {
+          "started": true
+        },
+        "return_payload": {
+          "status": "accepted",
+          "job_id": "ATT-7"
+        }
+      }
+    },
+    {
+      "name": "get_attendance_export",
+      "description": "Read an accepted export by job_id. Pending means the report is not yet visible; complete includes its report.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "export",
+        "operation": "read",
+        "requires": {
+          "started": true
+        },
+        "transient_failures": 2,
+        "failure_response": {
+          "status": "pending",
+          "job_id": "ATT-7"
+        },
+        "requires_arguments": {
+          "job_id": "ATT-7"
+        },
+        "rejection": {
+          "status": "error",
+          "code": "UNKNOWN_JOB"
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please request the monthly attendance export and save the completed report in {WORKSPACE}/attendance.json. I need the report itself, not just the job receipt.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "attendance.json",
+          "json_path": "attendees",
+          "expected": 42
+        },
+        {
+          "type": "json_equals",
+          "path": "attendance.json",
+          "json_path": "month",
+          "expected": "2026-09"
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "start_attendance_export"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "get_attendance_export"
+        }
+      ],
+      "output_checks": []
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Asynchronous completion",
+    "turns": 1,
+    "input_files": 0,
+    "services": 1,
+    "records": 0,
+    "dependency_depth": 3,
+    "fault_types": [
+      "delayed_completion"
+    ],
+    "interaction": "mixed",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 1
+  }
+}

@@ -11,7 +11,10 @@ from src.mock_registry import DynamicMockToolManager
 
 class FakeRegistry:
     def __init__(self):
-        self._tools = {name: object() for name in ("terminal", "read_file", "write_file")}
+        self._tools = {
+            name: SimpleNamespace(handler=lambda args, **kwargs: '{"status":"ok"}')
+            for name in ("terminal", "read_file", "write_file", "patch", "search_files")
+        }
         self._generation = 0
         self._toolset_checks = {"terminal": object()}
         self._toolset_aliases = {"shell": "terminal"}
@@ -105,6 +108,7 @@ class RegistryTestCase(TemporaryDirectoryTestCase):
         self.cached = {"old": True}
         self.patcher = patch.multiple(
             utils,
+            tool_working_directory=lambda task_id: None,
             registry=self.registry,
             toolsets=self.toolsets,
             model_tools=SimpleNamespace(_clear_tool_defs_cache=self.cached.clear),

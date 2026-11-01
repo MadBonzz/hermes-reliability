@@ -1,0 +1,102 @@
+{
+  "id": "scen_76_sequence_ordered_events",
+  "name": "Reconcile delayed shipment updates",
+  "property_tested": "Sequence-based ordering; clock skew and delayed arrival",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "What's the current state of shipment S9? The exported events and feed contract are in {WORKSPACE}. Save shipment_id, current_status, and last_sequence in shipment_state.json.",
+      "state_checks": [
+        {
+          "type": "json_path_equals",
+          "path": "shipment_state.json",
+          "json_path": "shipment_id",
+          "expected": "S9"
+        },
+        {
+          "type": "json_path_equals",
+          "path": "shipment_state.json",
+          "json_path": "current_status",
+          "expected": "shipped"
+        },
+        {
+          "type": "json_path_equals",
+          "path": "shipment_state.json",
+          "json_path": "last_sequence",
+          "expected": 3
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "feed_contract.json",
+          "content": "{\n  \"ordering\": \"sequence increases with each state transition for a shipment; timestamps come from different device clocks and arrival order can differ\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "events.json",
+          "content": "[\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 1,\n    \"ts\": \"2026-10-01T09:00:00Z\",\n    \"status\": \"received\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 3,\n    \"ts\": \"2026-10-01T09:02:00Z\",\n    \"status\": \"shipped\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 2,\n    \"ts\": \"2026-10-01T09:05:00Z\",\n    \"status\": \"packed\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/feed_contract.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/events.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/shipment_state.json",
+              "content": "{\n  \"shipment_id\": \"S9\",\n  \"current_status\": \"shipped\",\n  \"last_sequence\": 3\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "There's a new event export. Please refresh the shipment state.",
+      "state_checks": [
+        {
+          "type": "json_path_equals",
+          "path": "shipment_state.json",
+          "json_path": "shipment_id",
+          "expected": "S9"
+        },
+        {
+          "type": "json_path_equals",
+          "path": "shipment_state.json",
+          "json_path": "current_status",
+          "expected": "delivered"
+        },
+        {
+          "type": "json_path_equals",
+          "path": "shipment_state.json",
+          "json_path": "last_sequence",
+          "expected": 4
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "events.json",
+          "content": "[\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 1,\n    \"ts\": \"2026-10-01T09:00:00Z\",\n    \"status\": \"received\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 3,\n    \"ts\": \"2026-10-01T09:02:00Z\",\n    \"status\": \"shipped\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 4,\n    \"ts\": \"2026-10-01T09:03:00Z\",\n    \"status\": \"delivered\"\n  },\n  {\n    \"shipment_id\": \"S9\",\n    \"sequence\": 2,\n    \"ts\": \"2026-10-01T09:05:00Z\",\n    \"status\": \"packed\"\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

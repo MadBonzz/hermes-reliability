@@ -1,0 +1,422 @@
+{
+  "id": "v2_scen_95_reimbursement_batch_5_files_three_turns",
+  "name": "Reimbursement Batch across 5 files and three turns",
+  "property_tested": "reimbursement_batch",
+  "benchmark_version": 2,
+  "mock_tools": [
+    {
+      "name": "settle_reimbursement",
+      "description": "Settle a reimbursement. request_id identifies the same logical payment across retries. Replays with identical arguments return the original receipt without another charge. Different arguments under the same ID are rejected. Successful replies include receipt_id.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "amount_usd": {
+            "type": "number"
+          },
+          "request_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "invoice_id",
+          "recipient",
+          "amount_usd",
+          "request_id"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "settlements",
+        "operation": "idempotent_append",
+        "initial_state": {
+          "records": []
+        },
+        "idempotency_field": "request_id",
+        "receipt_prefix": "PAY",
+        "error_when_flag_set": "lost_ack",
+        "fail_before_write": false,
+        "clear_flag_after_first_error": true,
+        "error_message": "Connection closed before acknowledgement. Settlement outcome unknown.",
+        "return_payload": {
+          "status": "paid"
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please review the reimbursements under {WORKSPACE}/invoices and return the total approved amount as JSON with the field total_usd. The recording policy is payment_policy.json. Don't make any payments yet.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "invoices/R1.json",
+          "expected": {
+            "invoice_id": "R1",
+            "recipient": "Person 1",
+            "amount_usd": 7,
+            "status": "approved"
+          }
+        },
+        {
+          "type": "json_equals",
+          "path": "invoices/R2.json",
+          "expected": {
+            "invoice_id": "R2",
+            "recipient": "Person 2",
+            "amount_usd": 14,
+            "status": "approved"
+          }
+        },
+        {
+          "type": "json_equals",
+          "path": "invoices/R3.json",
+          "expected": {
+            "invoice_id": "R3",
+            "recipient": "Person 3",
+            "amount_usd": 21,
+            "status": "approved"
+          }
+        },
+        {
+          "type": "json_equals",
+          "path": "invoices/R4.json",
+          "expected": {
+            "invoice_id": "R4",
+            "recipient": "Person 4",
+            "amount_usd": 28,
+            "status": "approved"
+          }
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": []
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "json_path": "total_usd",
+          "expected": 70
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "payment_policy.json",
+          "content": "{\n  \"currency\": \"USD\",\n  \"payment_service\": \"settle_reimbursement\",\n  \"invoice_fields\": [\n    \"invoice_id\",\n    \"recipient\",\n    \"amount_usd\",\n    \"status\"\n  ],\n  \"on_payment\": \"set status to paid and add receipt_id from confirmed service response; preserve all other fields\",\n  \"duplicate_policy\": \"one settlement per invoice\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "invoices/R1.json",
+          "content": "{\n  \"invoice_id\": \"R1\",\n  \"recipient\": \"Person 1\",\n  \"amount_usd\": 7,\n  \"status\": \"approved\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "invoices/R2.json",
+          "content": "{\n  \"invoice_id\": \"R2\",\n  \"recipient\": \"Person 2\",\n  \"amount_usd\": 14,\n  \"status\": \"approved\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "invoices/R3.json",
+          "content": "{\n  \"invoice_id\": \"R3\",\n  \"recipient\": \"Person 3\",\n  \"amount_usd\": 21,\n  \"status\": \"approved\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "invoices/R4.json",
+          "content": "{\n  \"invoice_id\": \"R4\",\n  \"recipient\": \"Person 4\",\n  \"amount_usd\": 28,\n  \"status\": \"approved\"\n}\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/payment_policy.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R1.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R2.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R3.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R4.json"
+            }
+          }
+        ],
+        "final_response": "{\"total_usd\": 70}"
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Pay all approved reimbursements in {WORKSPACE}/invoices through the settlement service and bring their records up to date under payment_policy.json. Each invoice should be settled once.",
+      "state_checks": [
+        {
+          "type": "settlement_files_match",
+          "service": "settlements",
+          "path": "invoices",
+          "expected": [
+            {
+              "invoice_id": "R1",
+              "recipient": "Person 1",
+              "amount_usd": 7,
+              "status": "approved"
+            },
+            {
+              "invoice_id": "R2",
+              "recipient": "Person 2",
+              "amount_usd": 14,
+              "status": "approved"
+            },
+            {
+              "invoice_id": "R3",
+              "recipient": "Person 3",
+              "amount_usd": 21,
+              "status": "approved"
+            },
+            {
+              "invoice_id": "R4",
+              "recipient": "Person 4",
+              "amount_usd": 28,
+              "status": "approved"
+            }
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "payment_policy.json",
+          "expected": {
+            "currency": "USD",
+            "payment_service": "settle_reimbursement",
+            "invoice_fields": [
+              "invoice_id",
+              "recipient",
+              "amount_usd",
+              "status"
+            ],
+            "on_payment": "set status to paid and add receipt_id from confirmed service response; preserve all other fields",
+            "duplicate_policy": "one settlement per invoice"
+          }
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "set_fault_flag",
+          "flag_name": "lost_ack",
+          "flag_value": true
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "settle_reimbursement",
+            "arguments": {
+              "invoice_id": "R1",
+              "recipient": "Person 1",
+              "amount_usd": 7,
+              "request_id": "reimbursement-1"
+            }
+          },
+          {
+            "tool": "settle_reimbursement",
+            "arguments": {
+              "invoice_id": "R1",
+              "recipient": "Person 1",
+              "amount_usd": 7,
+              "request_id": "reimbursement-1"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R1.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R1.json",
+              "content": "{\"invoice_id\": \"R1\", \"recipient\": \"Person 1\", \"amount_usd\": 7, \"status\": \"paid\", \"receipt_id\": \"PAY-000001\"}"
+            }
+          },
+          {
+            "tool": "settle_reimbursement",
+            "arguments": {
+              "invoice_id": "R2",
+              "recipient": "Person 2",
+              "amount_usd": 14,
+              "request_id": "reimbursement-2"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R2.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R2.json",
+              "content": "{\"invoice_id\": \"R2\", \"recipient\": \"Person 2\", \"amount_usd\": 14, \"status\": \"paid\", \"receipt_id\": \"PAY-000002\"}"
+            }
+          },
+          {
+            "tool": "settle_reimbursement",
+            "arguments": {
+              "invoice_id": "R3",
+              "recipient": "Person 3",
+              "amount_usd": 21,
+              "request_id": "reimbursement-3"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R3.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R3.json",
+              "content": "{\"invoice_id\": \"R3\", \"recipient\": \"Person 3\", \"amount_usd\": 21, \"status\": \"paid\", \"receipt_id\": \"PAY-000003\"}"
+            }
+          },
+          {
+            "tool": "settle_reimbursement",
+            "arguments": {
+              "invoice_id": "R4",
+              "recipient": "Person 4",
+              "amount_usd": 28,
+              "request_id": "reimbursement-4"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R4.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices/R4.json",
+              "content": "{\"invoice_id\": \"R4\", \"recipient\": \"Person 4\", \"amount_usd\": 28, \"status\": \"paid\", \"receipt_id\": \"PAY-000004\"}"
+            }
+          }
+        ],
+        "final_response": "The approved reimbursements are paid and their records are updated."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Please make sure everything in that reimbursement batch has been handled. Reply with JSON containing all_paid as a boolean and settled_count as the number of invoices paid.",
+      "state_checks": [
+        {
+          "type": "settlement_files_match",
+          "service": "settlements",
+          "path": "invoices",
+          "expected": [
+            {
+              "invoice_id": "R1",
+              "recipient": "Person 1",
+              "amount_usd": 7,
+              "status": "approved"
+            },
+            {
+              "invoice_id": "R2",
+              "recipient": "Person 2",
+              "amount_usd": 14,
+              "status": "approved"
+            },
+            {
+              "invoice_id": "R3",
+              "recipient": "Person 3",
+              "amount_usd": 21,
+              "status": "approved"
+            },
+            {
+              "invoice_id": "R4",
+              "recipient": "Person 4",
+              "amount_usd": 28,
+              "status": "approved"
+            }
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "payment_policy.json",
+          "expected": {
+            "currency": "USD",
+            "payment_service": "settle_reimbursement",
+            "invoice_fields": [
+              "invoice_id",
+              "recipient",
+              "amount_usd",
+              "status"
+            ],
+            "on_payment": "set status to paid and add receipt_id from confirmed service response; preserve all other fields",
+            "duplicate_policy": "one settlement per invoice"
+          }
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "json_path": "all_paid",
+          "expected": true
+        },
+        {
+          "type": "json_answer",
+          "json_path": "settled_count",
+          "expected": 4
+        }
+      ]
+    }
+  ],
+  "complexity": {
+    "family": "reimbursement_batch",
+    "turns": 3,
+    "input_files": 5,
+    "services": 1,
+    "records": 4,
+    "dependency_depth": 3,
+    "fault_types": [
+      "lost_acknowledgement"
+    ],
+    "interaction": "mixed",
+    "scale_level": 5,
+    "notes": "Matched resource-count panel. File count counts all input files, including policy. Scale changes the number of dependent records; inspect both dimensions.",
+    "fault_count": 1,
+    "asserted_file_paths": 6
+  }
+}

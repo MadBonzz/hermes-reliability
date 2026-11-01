@@ -1,0 +1,62 @@
+{
+  "id": "scen_43_retire_customer_references",
+  "name": "Retire a customer while retaining order history",
+  "property_tested": "Referential integrity; preservation of unrelated records",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Customer U1 has closed their account. In {WORKSPACE}, remove U1 from customers.json and retain their orders under the existing ARCHIVE customer, as our retention policy requires. Other customers and orders should stay as they are.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "customers.json",
+          "expected": [
+            {
+              "id": "U2",
+              "name": "Bo"
+            },
+            {
+              "id": "ARCHIVE",
+              "name": "Closed accounts"
+            }
+          ]
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "orders.json",
+          "expected": [
+            {
+              "id": "O1",
+              "customer_id": "ARCHIVE",
+              "total": 40
+            },
+            {
+              "id": "O2",
+              "customer_id": "U2",
+              "total": 60
+            },
+            {
+              "id": "O3",
+              "customer_id": "ARCHIVE",
+              "total": 25
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "customers.json",
+          "content": "[\n  {\n    \"id\": \"U1\",\n    \"name\": \"Ada\"\n  },\n  {\n    \"id\": \"U2\",\n    \"name\": \"Bo\"\n  },\n  {\n    \"id\": \"ARCHIVE\",\n    \"name\": \"Closed accounts\"\n  }\n]\n"
+        },
+        {
+          "type": "write_file",
+          "path": "orders.json",
+          "content": "[\n  {\n    \"id\": \"O1\",\n    \"customer_id\": \"U1\",\n    \"total\": 40\n  },\n  {\n    \"id\": \"O2\",\n    \"customer_id\": \"U2\",\n    \"total\": 60\n  },\n  {\n    \"id\": \"O3\",\n    \"customer_id\": \"U1\",\n    \"total\": 25\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

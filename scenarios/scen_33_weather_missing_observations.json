@@ -1,0 +1,48 @@
+{
+  "id": "scen_33_weather_missing_observations",
+  "name": "Estimate rainy-day frequency from incomplete records",
+  "property_tested": "Missing versus zero; correct denominator and uncertainty",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Using the week of weather observations in {WORKSPACE}/rain.json, what percentage of days with a recorded measurement had at least 0.5 mm of rain? Save observed_days, rainy_days, percentage, and missing_dates in weather_summary.json. I also want the missing dates visible so I can judge the result.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "weather_summary.json",
+          "json_path": "observed_days",
+          "expected": 6
+        },
+        {
+          "type": "json_equals",
+          "path": "weather_summary.json",
+          "json_path": "rainy_days",
+          "expected": 3
+        },
+        {
+          "type": "json_equals",
+          "path": "weather_summary.json",
+          "json_path": "percentage",
+          "expected": 50
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "weather_summary.json",
+          "json_path": "missing_dates",
+          "expected": [
+            "2025-09-04"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "rain.json",
+          "content": "[\n  {\n    \"date\": \"2025-09-01\",\n    \"rain_mm\": 0\n  },\n  {\n    \"date\": \"2025-09-02\",\n    \"rain_mm\": 0.5\n  },\n  {\n    \"date\": \"2025-09-03\",\n    \"rain_mm\": 1.2\n  },\n  {\n    \"date\": \"2025-09-04\",\n    \"rain_mm\": null\n  },\n  {\n    \"date\": \"2025-09-05\",\n    \"rain_mm\": 0.1\n  },\n  {\n    \"date\": \"2025-09-06\",\n    \"rain_mm\": 2\n  },\n  {\n    \"date\": \"2025-09-07\",\n    \"rain_mm\": 0\n  }\n]\n"
+        }
+      ]
+    }
+  ]
+}

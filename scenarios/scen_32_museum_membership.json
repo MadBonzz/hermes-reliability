@@ -1,0 +1,46 @@
+{
+  "id": "scen_32_museum_membership",
+  "name": "Compare a family membership with day tickets",
+  "property_tested": "Eligibility-aware cost aggregation",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "We're two adults with children aged six and two, planning four visits within the next year to the science museum. Based on the saved ticket information in {WORKSPACE}/tickets.json, would a family membership save us money? Save day_tickets_usd, membership_usd, savings_usd, and cheaper_option ('membership' or 'day_tickets') in comparison.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "comparison.json",
+          "json_path": "day_tickets_usd",
+          "expected": 208
+        },
+        {
+          "type": "json_equals",
+          "path": "comparison.json",
+          "json_path": "membership_usd",
+          "expected": 190
+        },
+        {
+          "type": "json_equals",
+          "path": "comparison.json",
+          "json_path": "savings_usd",
+          "expected": 18
+        },
+        {
+          "type": "json_equals",
+          "path": "comparison.json",
+          "json_path": "cheaper_option",
+          "expected": "membership"
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "tickets.json",
+          "content": "{\n  \"adult_age_min\": 18,\n  \"adult_usd\": 20,\n  \"child_age_min\": 3,\n  \"child_age_max\": 17,\n  \"child_usd\": 12,\n  \"under_3_usd\": 0,\n  \"family_membership_usd\": 190,\n  \"family_membership_covers\": {\n    \"adults\": 2,\n    \"children\": 2\n  },\n  \"membership_valid_visits\": \"unlimited for one year\",\n  \"fees_usd\": 0\n}\n"
+        }
+      ]
+    }
+  ]
+}

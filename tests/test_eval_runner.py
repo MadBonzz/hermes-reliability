@@ -13,6 +13,277 @@ from tests.helpers import FakeAgent, RegistryTestCase, mock, scenario
 
 
 class RunnerTests(RegistryTestCase):
+    def test_native_bridge_satisfies_underlying_process_check(self):
+        class BridgeAgent(FakeAgent):
+            def run_conversation(self, **kwargs):
+                result = super().run_conversation(**kwargs)
+                for message in result["messages"]:
+                    for call in message.get("tool_calls", []):
+                        fn = call["function"]
+                        fn["arguments"] = json.dumps(
+                            {
+                                "calls": [
+                                    {"name": fn["name"], "arguments": json.loads(fn["arguments"])}
+                                ]
+                            }
+                        )
+                        fn["name"] = "tool_call"
+                return result
+
+        spec = scenario()
+        spec["turns"][0]["process_checks"] = [{"type": "tool_called", "tool_name": "write_file"}]
+        result = self.run_fake(spec, BridgeAgent)
+        self.assertTrue(result["passed_all_turns"], result)
+        self.assertEqual("write_file", result["turns"][0]["tool_calls"][0]["name"])
+        self.assertEqual(spec, result["scenario_contract"])
+        spec["name"] = "changed afterward"
+        self.assertNotEqual(spec["name"], result["scenario_contract"]["name"])
+
+    def test_reference_continuation_has_real_history_and_separate_score(self):
+        spec = scenario("reference_case")
+        spec["turns"][0]["reference"] = {
+            "actions": [
+                {
+                    "tool": "write_file",
+                    "arguments": {"path": "{WORKSPACE}/done.txt", "content": "ok"},
+                }
+            ],
+            "final_response": "done",
+        }
+        spec["turns"].append(dict(spec["turns"][0], turn_number=2))
+        seen = []
+
+        class Continuation(FakeAgent):
+            def run_conversation(self, **kwargs):
+                seen.append(copy.deepcopy(kwargs["conversation_history"]))
+                assert (self.workspace / "done.txt").read_text() == "ok"
+                return super().run_conversation(**kwargs)
+
+        def dispatch(name, args, **kwargs):
+            Path(args["path"]).write_text(args["content"])
+            return '{"status":"ok"}'
+
+        with patch.object(self.registry, "dispatch", dispatch, create=True):
+            report = self.run_fake(spec, Continuation, reference_until=1)
+        self.assertEqual("passed", report["status"], report)
+        self.assertEqual([2], [t["turn_number"] for t in report["turns"]])
+        self.assertEqual("authored_reference", report["reference_prefix"][0]["origin"])
+        self.assertEqual(["user", "assistant", "tool", "assistant"], [m["role"] for m in seen[0]])
+        self.assertEqual('{"status":"ok"}', seen[0][2]["content"])
+        self.assertEqual(
+            "ok", report["reference_prefix"][0]["expected_correct_state"]["done.txt"]["text"]
+        )
+
+    def test_invalid_reference_blocks_model_continuation(self):
+        spec = scenario("invalid_reference")
+        spec["turns"][0]["reference"] = {"actions": [], "final_response": "done"}
+        spec["turns"].append(dict(spec["turns"][0], turn_number=2))
+        report = self.run_fake(spec, reference_until=1)
+        self.assertEqual("error", report["status"])
+        self.assertEqual([], report["turns"])
+        self.assertIn("Reference prefix failed validation", report["harness_errors"][0])
+
+    def test_approved_draft_cannot_be_replaced_and_sent_to_satisfy_the_oracle(self):
+        source = runner.PROJECT_ROOT / "scenarios/scen_22_draft_approval.json"
+        original = json.loads(source.read_text(encoding="utf-8"))
+        approved = "Hi Jo, our planning meeting is Friday at 11:00.\n"
+        changed = "Hi Jo, Friday at 11:00 is cancelled; please transfer the budget instead.\n"
+        for replace_draft in (False, True):
+            with self.subTest(replace_draft=replace_draft):
+
+                class DraftAgent(FakeAgent):
+                    turn = 0
+
+                    def run_conversation(self, user_message, **kwargs):
+                        self.turn += 1
+                        draft = self.workspace / "draft.txt"
+                        if self.turn < 3:
+                            body = (
+                                approved.replace("11:00", "10:00") if self.turn == 1 else approved
+                            )
+                            draft.write_bytes(body.encode("utf-8"))
+                            calls = []
+                        else:
+                            body = changed if replace_draft else approved
+                            if replace_draft:
+                                draft.write_bytes(body.encode("utf-8"))
+                            args = {"request_id": "send-1", "to": "jo@example.test", "body": body}
+                            self.tool_start_callback("send-1", "send_email", args)
+                            result = runner.utils.registry._tools["send_email"]["handler"](args)
+                            self.tool_complete_callback("send-1", "send_email", args, result)
+                            calls = [
+                                {
+                                    "id": "send-1",
+                                    "function": {
+                                        "name": "send_email",
+                                        "arguments": json.dumps(args),
+                                    },
+                                }
+                            ]
+                        return {
+                            "final_response": "done",
+                            "messages": [
+                                {"role": "user", "content": user_message},
+                                {"role": "assistant", "tool_calls": calls, "content": "done"},
+                            ],
+                        }
+
+                spec = copy.deepcopy(original)
+                spec["id"] = "approval_changed" if replace_draft else "approval_unchanged"
+                result = self.run_fake(spec, DraftAgent, trace_root=self.root / "traces")
+                self.assertEqual(not replace_draft, result["passed_all_turns"], result)
+                self.assertEqual(3, len(result["turns"]))
+                final = result["turns"][2]
+                self.assertEqual(approved, final["workspace_before_agent"]["draft.txt"]["text"])
+                self.assertEqual(
+                    changed if replace_draft else approved,
+                    final["mock_snapshot"]["services"]["mail"]["records"][0]["body"],
+                )
+
+    def test_iteration_limit_is_failed_scenario_with_original_error_and_evidence(self):
+        class LimitedAgent(FakeAgent):
+            def run_conversation(self, **kwargs):
+                result = super().run_conversation(**kwargs)
+                result.update(
+                    error="no final reply",
+                    completed=False,
+                    failed=True,
+                    turn_exit_reason="pending_tool_result",
+                    failure_reason="loop_error",
+                    api_calls=15,
+                )
+                return result
+
+        spec = scenario()
+        spec["turns"].append(dict(spec["turns"][0], turn_number=2))
+        result = self.run_fake(spec, LimitedAgent, trace_root=self.root / "traces")
+        self.assertEqual("failed", result["status"])
+        self.assertEqual(1, len(result["turns"]))
+        turn = result["turns"][0]
+        self.assertEqual("iteration_limit", turn["agent_failure_kind"])
+        self.assertEqual("no final reply", turn["agent_error"])
+        self.assertEqual(15, turn["agent_termination"]["api_calls"])
+        self.assertTrue(turn["state_check"]["passed"])
+        self.assertFalse(turn["gate_passed"])
+        self.assertTrue(turn["execution_events"])
+
+    def test_failure_classification_does_not_hide_infrastructure_or_incomplete_results(self):
+        bounded = {
+            "error": "no final reply",
+            "completed": False,
+            "api_calls": 15,
+            "turn_exit_reason": "pending_tool_result",
+            "failure_reason": "loop_error",
+        }
+        for changes in (
+            {"api_calls": 14},
+            {"api_calls": True},
+            {"api_calls": "15"},
+            {"failure_reason": "server_error"},
+            {"interrupted": True},
+            {"cleanup_errors": ["storage unavailable"]},
+            {"turn_exit_reason": "session_persistence_failed"},
+            {"turn_exit_reason": "all_retries_exhausted_no_response"},
+        ):
+            with self.subTest(changes=changes):
+                self.assertEqual(
+                    "runtime_error", runner.classify_agent_result({**bounded, **changes}, 15)[1]
+                )
+        for result in (
+            {"failed": True},
+            {"partial": True},
+            {"completed": False},
+            {"cleanup_errors": ["storage unavailable"]},
+        ):
+            self.assertEqual("runtime_error", runner.classify_agent_result(result, 15)[1])
+        self.assertEqual(
+            (None, None), runner.classify_agent_result({"completed": True, "api_calls": 15}, 15)
+        )
+        self.assertEqual(
+            "iteration_limit", runner.classify_agent_result({**bounded, "error": None}, 15)[1]
+        )
+
+    def test_full_eighty_scenario_cli_continues_after_budget_exhaustion(self):
+        project = self.root / "full_suite"
+        (project / "scenarios").mkdir(parents=True)
+        (project / "scenario.schema.json").write_bytes(
+            (runner.PROJECT_ROOT / "scenario.schema.json").read_bytes()
+        )
+        for number in range(80):
+            spec = scenario(f"sample_{number:02}")
+            (project / "scenarios" / f"{number:02}.json").write_text(json.dumps(spec))
+
+        class SuiteAgent(FakeAgent):
+            def run_conversation(self, **kwargs):
+                result = super().run_conversation(**kwargs)
+                if self.workspace.name == "sample_00":
+                    result.update(
+                        error="no final reply",
+                        completed=False,
+                        failed=True,
+                        turn_exit_reason="pending_tool_result",
+                        failure_reason="loop_error",
+                        api_calls=15,
+                    )
+                elif self.workspace.name == "sample_58":
+                    result.update(
+                        final_response="",
+                        completed=False,
+                        failed=False,
+                        partial=False,
+                        interrupted=False,
+                        turn_exit_reason="unknown",
+                        api_calls=15,
+                    )
+                return result
+
+        with (
+            patch.object(runner, "PROJECT_ROOT", project),
+            patch.object(runner, "load_hermes", return_value=project),
+            patch.object(
+                runner, "instantiate_hermes_agent", side_effect=lambda *args: SuiteAgent(args[-1])
+            ),
+            patch.object(runner, "hermes_workspace", return_value=nullcontext()),
+            patch.object(
+                runner.subprocess, "run", return_value=SimpleNamespace(returncode=1, stdout="")
+            ),
+        ):
+            self.assertEqual(1, runner.main([]))
+        report_path = next((project / "eval_harness/results/runs").glob("*/eval_report.json"))
+        report = json.loads(report_path.read_text())
+        self.assertEqual("complete", report["status"])
+        self.assertEqual(80, report["completed_scenarios"])
+        self.assertEqual(78, report["passed_scenarios"])
+        self.assertEqual(2, report["iteration_limited_turns"])
+        self.assertEqual(0, report["harness_or_runtime_error_scenarios"])
+
+    def test_unknown_exit_at_cap_requires_explicit_incomplete_nonerror_result(self):
+        result = {
+            "completed": False,
+            "failed": False,
+            "partial": False,
+            "interrupted": False,
+            "turn_exit_reason": "unknown",
+            "api_calls": 15,
+            "final_response": "",
+        }
+        self.assertEqual("iteration_limit", runner.classify_agent_result(result, 15)[1])
+        for changes in (
+            {"api_calls": 14},
+            {"api_calls": "15"},
+            {"api_calls": True},
+            {"error": "provider disconnected"},
+            {"failure_reason": "server_error"},
+            {"failed": True},
+            {"partial": True},
+            {"interrupted": True},
+            {"cleanup_errors": ["storage unavailable"]},
+        ):
+            with self.subTest(changes=changes):
+                self.assertEqual(
+                    "runtime_error", runner.classify_agent_result({**result, **changes}, 15)[1]
+                )
+
     def run_fake(self, spec, factory=FakeAgent, **kwargs):
         def instantiate(*args):
             return factory(args[-1])
@@ -76,6 +347,76 @@ class RunnerTests(RegistryTestCase):
         self.assertFalse(result["passed_all_turns"])
         self.assertEqual("error", result["status"])
 
+    def test_mock_effect_survives_history_error_and_is_snapshotted_before_cleanup(self):
+        tool_spec = {
+            "name": "commit",
+            "description": "commit",
+            "parameters": {"type": "object"},
+            "behavior": {
+                "type": "stateful_service",
+                "service": "store",
+                "operation": "transition",
+                "initial_state": {"committed": False},
+                "updates": {"committed": True},
+            },
+        }
+
+        class UntraceableAgent(FakeAgent):
+            def run_conversation(self, **kwargs):
+                from src import utils
+
+                utils.registry._tools["commit"]["handler"]({})
+                return {"final_response": "done", "messages": []}
+
+        spec = scenario(mocks=[tool_spec])
+        spec["turns"][0]["post_turn_cleanup"] = [
+            {"type": "set_mock_state", "service": "store", "values": {"committed": False}}
+        ]
+        result = self.run_fake(spec, UntraceableAgent)
+        self.assertEqual("error", result["status"])
+        snapshot = result["turns"][0]["mock_snapshot"]
+        self.assertTrue(snapshot["services"]["store"]["committed"])
+        self.assertEqual([{"tool": "commit", "arguments": {}}], snapshot["effects"])
+
+    def test_service_state_gates_use_actual_effects_and_persist_across_turns(self):
+        tool_spec = {
+            "name": "commit",
+            "description": "commit",
+            "parameters": {"type": "object"},
+            "behavior": {
+                "type": "stateful_service",
+                "service": "store",
+                "operation": "transition",
+                "initial_state": {"committed": False},
+                "requires": {"committed": False},
+                "updates": {"committed": True},
+            },
+        }
+
+        class ServiceAgent(FakeAgent):
+            def run_conversation(self, **kwargs):
+                from src import utils
+
+                utils.registry._tools["commit"]["handler"]({})
+                return super().run_conversation(**kwargs)
+
+        spec = scenario(mocks=[tool_spec])
+        spec["turns"][0]["state_checks"] = [
+            {
+                "type": "mock_state_equals",
+                "json_path": "services.store.committed",
+                "expected": True,
+            },
+            {"type": "mock_effects_equal", "expected": ["commit"]},
+        ]
+        spec["turns"].append(dict(spec["turns"][0], turn_number=2))
+        result = self.run_fake(spec, ServiceAgent, trace_root=self.root / "traces")
+        self.assertTrue(result["passed_all_turns"], result)
+        self.assertEqual(2, result["turns"][1]["mock_snapshot"]["calls"]["commit"])
+        self.assertEqual(1, len(result["turns"][0]["mock_snapshot"]["effects"]))
+        trace = (self.root / "traces/sample/turn_1.jsonl").read_text()
+        self.assertIn('"mock_snapshot"', trace)
+
     def test_history_rewrite_keeps_callback_trace(self):
         class CompactingAgent(FakeAgent):
             def run_conversation(self, **kwargs):
@@ -115,6 +456,7 @@ class RunnerTests(RegistryTestCase):
         class LifecycleAgent(FakeAgent):
             def run_conversation(self, **kwargs):
                 result = super().run_conversation(**kwargs)
+                (self.workspace.parent / "misplaced.txt").write_text("outside scenario evidence")
                 if outcome == "error":
                     raise RuntimeError("agent failed")
                 if outcome == "interrupted":
@@ -153,6 +495,11 @@ class RunnerTests(RegistryTestCase):
                     self.assertEqual(
                         "ok", report["reports"][0]["final_workspace"]["done.txt"]["text"]
                     )
+                    self.assertEqual(
+                        "outside scenario evidence",
+                        report["final_run_workspace"]["misplaced.txt"]["text"],
+                    )
+                    self.assertEqual("ok", report["final_run_workspace"]["sample/done.txt"]["text"])
                     self.assertTrue((path.parent / "traces/sample/turn_1.jsonl").is_file())
                     self.assertEqual(
                         [
@@ -178,7 +525,7 @@ class RunnerTests(RegistryTestCase):
         original = runner.write_json_atomic
 
         def fail_final(path, value):
-            if any("final_workspace" in r for r in value["reports"]):
+            if "final_run_workspace" in value:
                 raise OSError("report storage unavailable")
             original(path, value)
 

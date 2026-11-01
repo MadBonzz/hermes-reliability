@@ -1,0 +1,40 @@
+{
+  "id": "scen_58_tolerant_contact_import",
+  "name": "Import messy contacts without inventing missing values",
+  "property_tested": "Tolerant parsing; strict output types and missing-value semantics",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Import {WORKSPACE}/contacts.csv for our address-book app. Save contacts.json as an array with only id, name, phone, and email for each row. Trim surrounding whitespace, keep phone numbers as text, and use null for a missing email. The notes column is for internal use and isn't part of this import.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "contacts.json",
+          "expected": [
+            {
+              "id": "C1",
+              "name": "Ada Kim",
+              "phone": "00123",
+              "email": "ada@example.test"
+            },
+            {
+              "id": "C2",
+              "name": "Bo Ray",
+              "phone": "00456",
+              "email": null
+            }
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "contacts.csv",
+          "content": "id,name,phone,email,notes\n C1 , Ada Kim , 00123 , ada@example.test , VIP\nC2, Bo Ray ,00456, , call later\n"
+        }
+      ]
+    }
+  ]
+}

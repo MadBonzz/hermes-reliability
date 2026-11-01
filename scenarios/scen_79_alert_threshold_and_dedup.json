@@ -1,0 +1,200 @@
+{
+  "id": "scen_79_alert_threshold_and_dedup",
+  "name": "Page only for a sustained incident and only once",
+  "property_tested": "Alert thresholding; incident-level deduplication",
+  "mock_tools": [
+    {
+      "name": "page_operator",
+      "description": "Record an operator page for an incident. incident_id identifies the incident and deduplicates identical submissions. No real notification is sent by this evaluation service.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "incident_id",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "alerts",
+        "operation": "idempotent_append",
+        "initial_state": {
+          "records": []
+        },
+        "idempotency_field": "incident_id",
+        "receipt_prefix": "PAGE"
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Check the worker log in {WORKSPACE}/worker.log. Our policy is to page for job JOB-9 after three consecutive ERROR events, with INFO or WARN resetting the streak. Use JOB-9 as the incident ID and send at most one page per incident. page_required indicates whether the threshold has been reached, including after a page has been sent. Save consecutive_errors and page_required in monitor.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "monitor.json",
+          "json_path": "consecutive_errors",
+          "expected": 2
+        },
+        {
+          "type": "json_equals",
+          "path": "monitor.json",
+          "json_path": "page_required",
+          "expected": false
+        },
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.alerts.records",
+          "expected": []
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": []
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_not_called",
+          "tool_name": "page_operator"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "worker.log",
+          "content": "WARN warming up\nERROR connection failed\nINFO connection restored\nERROR read failed\nERROR read failed\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/worker.log"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/monitor.json",
+              "content": "{\n  \"consecutive_errors\": 2,\n  \"page_required\": false\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "The worker has written another event. Please check it again.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "monitor.json",
+          "json_path": "consecutive_errors",
+          "expected": 3
+        },
+        {
+          "type": "json_equals",
+          "path": "monitor.json",
+          "json_path": "page_required",
+          "expected": true
+        },
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.alerts.records.0.incident_id",
+          "expected": "JOB-9"
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "page_operator"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "page_operator"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "append_file",
+          "path": "worker.log",
+          "content": "ERROR read failed\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/worker.log"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/monitor.json"
+            }
+          },
+          {
+            "tool": "page_operator",
+            "arguments": {
+              "incident_id": "JOB-9",
+              "message": "Three consecutive ERROR events for JOB-9."
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/monitor.json",
+              "content": "{\n  \"consecutive_errors\": 3,\n  \"page_required\": true\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 3,
+      "prompt": "Check once more; no new log entries have arrived.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "monitor.json",
+          "json_path": "consecutive_errors",
+          "expected": 3
+        },
+        {
+          "type": "json_equals",
+          "path": "monitor.json",
+          "json_path": "page_required",
+          "expected": true
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "page_operator"
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

@@ -7,6 +7,7 @@ Hermes itself is imported only when load_hermes() is called.
 import copy
 import importlib
 import inspect
+import json
 import os
 import sys
 from contextlib import contextmanager
@@ -16,6 +17,29 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = None
 model_tools = toolsets = registry = AIAgent = None
+
+EVAL_HERMES_CONFIG = {"agent": {"coding_context": "off", "coding_instructions": ""}}
+
+
+@contextmanager
+def hermes_run_environment(home):
+    """Use a fresh, recorded Hermes profile instead of the operator's ambient config.
+
+    Enter before importing Hermes: its modules cache home/config paths at import.
+    Native context-file skipping alone does not disable automatic repo discovery.
+    """
+    home = Path(home).resolve()
+    home.mkdir(parents=True, exist_ok=False)
+    (home / "config.yaml").write_text(json.dumps(EVAL_HERMES_CONFIG, indent=2), encoding="utf-8")
+    previous = os.environ.get("HERMES_HOME")
+    os.environ["HERMES_HOME"] = str(home)
+    try:
+        yield home
+    finally:
+        if previous is None:
+            os.environ.pop("HERMES_HOME", None)
+        else:
+            os.environ["HERMES_HOME"] = previous
 
 
 def load_eval_config(env_path):
@@ -88,6 +112,47 @@ def get_json_path(data: Any, path_str: str) -> tuple[bool, Any]:
     return True, curr
 
 
+def unwrap_tool_call(name, arguments):
+    """Resolve Hermes's single-target bridge, keeping malformed envelopes intact.
+
+    Native Hermes expands local batches before persisting history. Do not parse
+    shell/code text or guess dispatches from a multi-target/invalid envelope.
+    """
+    original = name, arguments
+    if name != "tool_call":
+        return original
+    try:
+        envelope = json.loads(arguments) if isinstance(arguments, str) else arguments
+        if not isinstance(envelope, dict):
+            return original
+        entries = envelope.get("calls")
+        if entries is None:
+            entries = [envelope]
+        if isinstance(entries, str):
+            entries = json.loads(entries)
+        if isinstance(entries, dict):
+            entries = [entries]
+        if not isinstance(entries, list) or len(entries) != 1 or not isinstance(entries[0], dict):
+            return original
+        entry = entries[0]
+        target = entry.get("name")
+        if not isinstance(target, str) or not target.strip():
+            return original
+        target = target.strip()
+        if target in {"tool_call", "tool_describe", "tool_search"}:
+            return original
+        args = entry.get("arguments")
+        if args is None or (isinstance(args, str) and not args.strip()):
+            args = {}
+        if isinstance(args, str):
+            args = json.loads(args)
+        if not isinstance(args, dict):
+            return original
+        return target, args
+    except (TypeError, ValueError):
+        return original
+
+
 def extract_turn_tool_calls(messages: list[dict[str, Any]], start_idx: int) -> list[dict[str, Any]]:
     """
     Extracts all tool calls emitted by the assistant during the current turn.
@@ -107,6 +172,7 @@ def extract_turn_tool_calls(messages: list[dict[str, Any]], start_idx: int) -> l
                     fn = getattr(tc, "function", None)
                     name = getattr(fn, "name", "unknown") if fn else "unknown"
                     args = getattr(fn, "arguments", "{}") if fn else "{}"
+                name, args = unwrap_tool_call(name, args)
                 calls.append({"name": name, "arguments": args})
     return calls
 
@@ -157,7 +223,14 @@ def instantiate_hermes_agent(base_url, model_name, api_key, max_iterations, work
         "load_soul_identity": False,
         "cwd": str(workspace) if workspace else None,
     }
+    if model_name == "command-a-plus-05-2026":
+        candidates["reasoning_config"] = {"enabled": True, "effort": "high"}
+    elif model_name == "command-a-03-2025":
+        # The compatibility endpoint rejects explicit effort levels for Command A.
+        candidates["reasoning_config"] = {}
     agent = AIAgent(**{k: v for k, v in candidates.items() if k in accepted and v is not None})
+    if model_name == "command-a-03-2025":
+        agent.reasoning_config = {}
     # New Hermes versions use this flag instead of the removed persist_session kwarg.
     if hasattr(agent, "_persist_disabled"):
         agent._persist_disabled = True
@@ -178,6 +251,13 @@ def check_tool_catalog(agent, mocks):
         if name not in registry._tools:
             raise RuntimeError(f"Tool schema has no registered handler: {name}")
     return copy.deepcopy(tools)
+
+
+def tool_working_directory(task_id):
+    """Preserve native relative-path semantics after a task changes directories."""
+    from tools.terminal_tool import get_session_cwd
+
+    return get_session_cwd(task_id)
 
 
 def resolve_ws_path(workspace: Path, rel_path: str) -> Path:

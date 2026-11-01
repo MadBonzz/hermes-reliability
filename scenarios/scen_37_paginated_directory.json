@@ -1,0 +1,87 @@
+{
+  "id": "scen_37_paginated_directory",
+  "name": "Complete a search across directory pages",
+  "property_tested": "Pagination completeness; correct result boundaries",
+  "mock_tools": [
+    {
+      "name": "list_repair_shops",
+      "description": "Read a page of the local repair-shop directory. Use cursor 'start' for the first page. next_cursor is null only on the final page. Records have id and open fields.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "cursor"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "directory",
+        "operation": "lookup",
+        "lookup_arg": "cursor",
+        "responses": {
+          "start": {
+            "items": [
+              {
+                "id": "R1",
+                "open": true
+              },
+              {
+                "id": "R2",
+                "open": false
+              }
+            ],
+            "next_cursor": "page-2"
+          },
+          "page-2": {
+            "items": [
+              {
+                "id": "R3",
+                "open": true
+              }
+            ],
+            "next_cursor": "page-3"
+          },
+          "page-3": {
+            "items": [
+              {
+                "id": "R4",
+                "open": true
+              }
+            ],
+            "next_cursor": null
+          }
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "I need every currently open repair shop in the neighborhood directory. Use the directory service and save their IDs in {WORKSPACE}/repair_shops.json as an array.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "repair_shops.json",
+          "expected": [
+            "R1",
+            "R3",
+            "R4"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "list_repair_shops"
+        }
+      ],
+      "output_checks": []
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "id": "v2_scen_39_unknown_accessibility",
+  "name": "Keep unknown accessibility separate from inaccessible",
+  "property_tested": "Epistemic status; revision with new evidence",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Compare the wheelchair access described in {WORKSPACE}/venue_notes.json. Reply with JSON arrays confirmed_accessible, confirmed_inaccessible and unknown, containing venue IDs.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": [
+            "V1"
+          ],
+          "json_path": "confirmed_accessible",
+          "unordered": true
+        },
+        {
+          "type": "json_answer",
+          "expected": [
+            "V2"
+          ],
+          "json_path": "confirmed_inaccessible",
+          "unordered": true
+        },
+        {
+          "type": "json_answer",
+          "expected": [
+            "V3"
+          ],
+          "json_path": "unknown",
+          "unordered": true
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "venue_notes.json",
+          "content": "[\n  {\n    \"id\": \"V1\",\n    \"statement\": \"The venue confirms step-free entrance and accessible toilets.\"\n  },\n  {\n    \"id\": \"V2\",\n    \"statement\": \"The only entrance has stairs and no lift.\"\n  },\n  {\n    \"id\": \"V3\",\n    \"statement\": \"We have asked about accessibility and are waiting for a reply.\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/venue_notes.json"
+            }
+          }
+        ],
+        "final_response": "{\"confirmed_accessible\": [\"V1\"], \"confirmed_inaccessible\": [\"V2\"], \"unknown\": [\"V3\"]}"
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "V3 has replied that its entrance and toilets are wheelchair accessible. Update the comparison in your reply.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": [
+            "V1",
+            "V3"
+          ],
+          "json_path": "confirmed_accessible",
+          "unordered": true
+        },
+        {
+          "type": "json_answer",
+          "expected": [
+            "V2"
+          ],
+          "json_path": "confirmed_inaccessible",
+          "unordered": true
+        },
+        {
+          "type": "json_answer",
+          "expected": [],
+          "json_path": "unknown",
+          "unordered": true
+        }
+      ]
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Epistemic status",
+    "turns": 2,
+    "input_files": 1,
+    "services": 0,
+    "records": 3,
+    "dependency_depth": 2,
+    "fault_types": [
+      "incomplete_information"
+    ],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 0
+  }
+}

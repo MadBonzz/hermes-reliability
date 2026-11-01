@@ -1,0 +1,170 @@
+{
+  "id": "v2_scen_57_feature_flag_routing",
+  "name": "Use the enabled document writer",
+  "property_tested": "Runtime configuration freshness; API routing",
+  "mock_tools": [
+    {
+      "name": "write_bulletin_v1",
+      "description": "Legacy bulletin writer. Use only for deployments selecting v1.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "bulletin",
+        "operation": "transition",
+        "initial_state": {
+          "text": ""
+        },
+        "updates": {
+          "text": {
+            "$arg": "text"
+          }
+        },
+        "return_payload": {
+          "status": "ok",
+          "warning": "v1 is deprecated; deployment configuration determines the supported version."
+        }
+      }
+    },
+    {
+      "name": "write_bulletin_v2",
+      "description": "Bulletin writer for deployments selecting v2.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "bulletin",
+        "operation": "transition",
+        "updates": {
+          "text": {
+            "$arg": "text"
+          }
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Publish 'Welcome' to the bulletin service. Our deployment settings in {WORKSPACE}/features.json select the supported writer.",
+      "state_checks": [
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.bulletin.text",
+          "expected": "Welcome"
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "write_bulletin_v1"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "write_bulletin_v1"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "features.json",
+          "content": "{\n  \"writer_version\": \"v1\"\n}\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/features.json"
+            }
+          },
+          {
+            "tool": "write_bulletin_v1",
+            "arguments": {
+              "text": "Welcome"
+            }
+          }
+        ],
+        "final_response": "Completed the requested operation."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Publish 'Registration is open' to the bulletin. The deployment settings may have changed since the last update.",
+      "state_checks": [
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.bulletin.text",
+          "expected": "Registration is open"
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "write_bulletin_v1",
+            "write_bulletin_v2"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "write_bulletin_v2"
+        },
+        {
+          "type": "tool_not_called",
+          "tool_name": "write_bulletin_v1"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "features.json",
+          "content": "{\n  \"writer_version\": \"v2\"\n}\n"
+        }
+      ]
+    }
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Runtime configuration freshness",
+    "turns": 2,
+    "input_files": 1,
+    "services": 1,
+    "records": 2,
+    "dependency_depth": 2,
+    "fault_types": [
+      "feature_flag_change"
+    ],
+    "interaction": "mixed",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 0
+  }
+}

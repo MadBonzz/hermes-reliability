@@ -4,6 +4,48 @@ from tests.helpers import RegistryTestCase, mock
 
 
 class MockRegistryTests(RegistryTestCase):
+    def test_invalid_arguments_do_not_commit_or_consume_file_mock_fault(self):
+        flags = {"fail": True}
+        manager = self.make_mock_manager(self.root, flags)
+        handler = manager._build_handler(
+            {
+                "parameters": {
+                    "type": "object",
+                    "properties": {"amount": {"type": "integer"}},
+                    "required": ["amount"],
+                    "additionalProperties": False,
+                },
+                "behavior": {
+                    "type": "state_append_and_optional_error",
+                    "target_file": "records.json",
+                    "error_when_flag_set": "fail",
+                    "clear_flag_after_first_error": True,
+                },
+            }
+        )
+        for args in ({}, [], "bad json", {"amount": True}, {"amount": 1, "extra": 2}):
+            with self.subTest(args=args):
+                self.assertEqual("INVALID_ARGUMENTS", json.loads(handler(args))["code"])
+                self.assertFalse((self.root / "records.json").exists())
+                self.assertTrue(flags["fail"])
+        self.assertEqual("error", json.loads(handler({"amount": 1}))["status"])
+        self.assertEqual([{"amount": 1}], json.loads((self.root / "records.json").read_text()))
+        self.assertFalse(flags["fail"])
+
+    def test_static_read_does_not_create_parent_directories(self):
+        handler = self.make_mock_manager(self.root, {})._build_handler(
+            {
+                "behavior": {
+                    "type": "static_return",
+                    "target_file": "missing/state.json",
+                    "read_target_file": True,
+                    "return_payload": {"status": "unavailable"},
+                },
+            }
+        )
+        self.assertEqual({"status": "unavailable"}, json.loads(handler({})))
+        self.assertFalse((self.root / "missing").exists())
+
     def test_cleanup_without_snapshot_is_noop(self):
         before = dict(self.registry._tools)
         self.make_mock_manager(self.root, {}).cleanup()

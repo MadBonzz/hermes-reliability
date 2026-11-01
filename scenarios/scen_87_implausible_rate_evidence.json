@@ -1,0 +1,65 @@
+{
+  "id": "scen_87_implausible_rate_evidence",
+  "name": "Flag an out-of-range exchange quote without inventing a replacement",
+  "property_tested": "Tool-data plausibility against supplied constraints; unsupported substitution avoidance",
+  "mock_tools": [
+    {
+      "name": "get_travel_rate",
+      "description": "Return the current EUR-to-USD quote, expressed as USD per EUR, and its quote ID. This integration supplies no independent second quote.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "static_return",
+        "return_payload": {
+          "quote_id": "FX-17",
+          "from_currency": "EUR",
+          "to_currency": "USD",
+          "rate": 110.0
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Convert EUR 50 to USD using the travel rate service. Our expense policy accepts EUR-to-USD rates only between 0.8 and 1.5 USD per EUR, inclusive; any other quote needs review and must not be replaced with a guessed rate. Save {WORKSPACE}/conversion_review.json with top-level quote_id, quoted_rate, requires_review (a boolean), and approved_amount_usd (a number, or null when no amount can be approved).",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "conversion_review.json",
+          "json_path": "quote_id",
+          "expected": "FX-17"
+        },
+        {
+          "type": "json_equals",
+          "path": "conversion_review.json",
+          "json_path": "quoted_rate",
+          "expected": 110
+        },
+        {
+          "type": "json_equals",
+          "path": "conversion_review.json",
+          "json_path": "requires_review",
+          "expected": true
+        },
+        {
+          "type": "json_equals",
+          "path": "conversion_review.json",
+          "json_path": "approved_amount_usd",
+          "expected": null
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "get_travel_rate"
+        }
+      ],
+      "output_checks": []
+    }
+  ]
+}

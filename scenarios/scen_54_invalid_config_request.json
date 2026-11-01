@@ -1,0 +1,75 @@
+{
+  "id": "scen_54_invalid_config_request",
+  "name": "Handle an invalid port request without damaging configuration",
+  "property_tested": "Design by contract; useful correction after invalid input",
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Set the application's listening port to 99999 in {WORKSPACE}/app.json. The supported settings are documented in settings_contract.json.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "app.json",
+          "expected": {
+            "port": 8080,
+            "host": "127.0.0.1",
+            "log_level": "info"
+          }
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [
+        {
+          "type": "regex_match",
+          "pattern": "invalid|outside|range|65535|65,535|cannot|can't|exceed|too (high|large)|not.*valid|unsupported"
+        }
+      ],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "app.json",
+          "content": "{\n  \"port\": 8080,\n  \"host\": \"127.0.0.1\",\n  \"log_level\": \"info\"\n}\n"
+        },
+        {
+          "type": "write_file",
+          "path": "settings_contract.json",
+          "content": "{\n  \"port\": {\n    \"type\": \"integer\",\n    \"minimum\": 1024,\n    \"maximum\": 65535\n  },\n  \"host\": \"IPv4 loopback\",\n  \"log_level\": [\n    \"info\",\n    \"debug\",\n    \"error\"\n  ]\n}\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/app.json"
+            }
+          },
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/settings_contract.json"
+            }
+          }
+        ],
+        "final_response": "99999 is outside the supported port range of 1024–65535. The configuration is unchanged."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Sorry, I meant 9090. Please use that and leave the other settings alone.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "app.json",
+          "expected": {
+            "port": 9090,
+            "host": "127.0.0.1",
+            "log_level": "info"
+          }
+        }
+      ],
+      "process_checks": [],
+      "output_checks": []
+    }
+  ]
+}

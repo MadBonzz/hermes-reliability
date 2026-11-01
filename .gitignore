@@ -4,7 +4,7 @@
 !.env.example
 
 # Local evaluation evidence: reports, traces, correlated requests, diagnostics,
-# and retained task workspaces. Authored inputs live in /scenarios/ instead.
+# and retained task workspaces. Authored inputs live in /scenarios/ and /scenarios_v2/.
 /eval_harness/
 
 # Common alternative destinations for --output, --workspace-root, or log exports.
@@ -15,7 +15,23 @@
 /logs/
 /matched_requests/
 /eval_report.json
+/v2_runs/
+/orchestrator_runs/
+/reference_validation/
+/diagnostics/
+/attribution/
+/analysis/
+/analyses/
+/analysis.md
+/analysis_*.md
+/*_analysis.md
+/*_transcripts.md
+/HERMES_BUG_BACKLOG.md
+/orchestrator.json
+/prices.json
 *.log
+*.jpg
+*.jpeg
 
 # Python runtime artifacts.
 __pycache__/

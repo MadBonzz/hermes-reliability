@@ -38,6 +38,11 @@ def sha256_file(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def read_jsonl(path):
+    """Read complete JSONL evidence; malformed or empty records remain errors."""
+    return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
+
+
 class TurnTrace:
     """Capture execution events immediately, before history compaction can erase them."""
 
@@ -91,13 +96,18 @@ def current_turn_messages(messages, prompt):
 def workspace_manifest(workspace):
     """Snapshot small benchmark artifacts before cleanup, without following escaped links."""
     workspace = Path(workspace).resolve()
-    result = {}
+    # A missing directory and an empty one have different directory_files results.
+    # Keep the root as well as nested directories so saved evidence retains that
+    # distinction after the original workspace is removed.
+    result = {".": {"kind": "directory"}} if workspace.is_dir() else {}
     for path in sorted(workspace.rglob("*")):
         if not path.resolve().is_relative_to(workspace) or path.is_symlink():
             continue
-        if path.is_file():
+        if path.is_dir():
+            result[path.relative_to(workspace).as_posix()] = {"kind": "directory"}
+        elif path.is_file():
             raw = path.read_bytes()
-            item = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+            item = {"kind": "file", "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
             if len(raw) <= 1_000_000:
                 try:
                     item["text"] = raw.decode("utf-8")

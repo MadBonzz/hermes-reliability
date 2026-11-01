@@ -1,0 +1,157 @@
+{
+  "id": "scen_41_versioned_event_edit",
+  "name": "Update a shared event without losing a teammate's edit",
+  "property_tested": "Optimistic concurrency and external-state freshness",
+  "mock_tools": [
+    {
+      "name": "get_event",
+      "description": "Get the current event object, including its version.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "event",
+        "operation": "read",
+        "initial_state": {
+          "version": 1,
+          "room": "Cedar",
+          "capacity": 100
+        }
+      }
+    },
+    {
+      "name": "update_event",
+      "description": "Replace room and capacity for this event. expected_version must match its current version; a conflict changes nothing and returns the current object.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "expected_version": {
+            "type": "integer"
+          },
+          "room": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "expected_version",
+          "room",
+          "capacity"
+        ],
+        "additionalProperties": false
+      },
+      "behavior": {
+        "type": "stateful_service",
+        "service": "event",
+        "operation": "compare_and_swap",
+        "updates": {
+          "room": {
+            "$arg": "room"
+          },
+          "capacity": {
+            "$arg": "capacity"
+          }
+        }
+      }
+    }
+  ],
+  "turns": [
+    {
+      "turn_number": 1,
+      "prompt": "Please get the current event details from the event service and save them in {WORKSPACE}/event_review.json so I can review them.",
+      "state_checks": [
+        {
+          "type": "json_equals",
+          "path": "event_review.json",
+          "json_path": "version",
+          "expected": 1
+        },
+        {
+          "type": "json_equals",
+          "path": "event_review.json",
+          "json_path": "room",
+          "expected": "Cedar"
+        },
+        {
+          "type": "json_equals",
+          "path": "event_review.json",
+          "json_path": "capacity",
+          "expected": 100
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": []
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "get_event"
+        }
+      ],
+      "output_checks": [],
+      "reference": {
+        "actions": [
+          {
+            "tool": "get_event",
+            "arguments": {}
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/event_review.json",
+              "content": "{\n  \"version\": 1,\n  \"room\": \"Cedar\",\n  \"capacity\": 100\n}\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
+    },
+    {
+      "turn_number": 2,
+      "prompt": "Reduce the capacity to 80. Keep any other changes the venue team has made.",
+      "state_checks": [
+        {
+          "type": "mock_state_equals",
+          "json_path": "services.event",
+          "expected": {
+            "version": 3,
+            "room": "Maple",
+            "capacity": 80
+          }
+        },
+        {
+          "type": "mock_effects_equal",
+          "expected": [
+            "update_event"
+          ]
+        }
+      ],
+      "process_checks": [
+        {
+          "type": "tool_called",
+          "tool_name": "update_event"
+        }
+      ],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "set_mock_state",
+          "service": "event",
+          "values": {
+            "version": 2,
+            "room": "Maple"
+          }
+        }
+      ]
+    }
+  ]
+}

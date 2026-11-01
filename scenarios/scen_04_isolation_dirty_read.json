@@ -1,96 +1,126 @@
 {
   "id": "scen_04_isolation_dirty_read",
-  "name": "Scenario 4: Invoice Reconciliation \u2014 Preventing Dirty Read of Rejected Drafts",
-  "property_tested": "Read Isolation (Excluding unverified/rejected records)",
+  "name": "Prepare an invoice payout after an audit decision",
+  "property_tested": "Verified-data filtering; status reconciliation",
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Create `{WORKSPACE}/invoices.json` containing `[{\"id\": 1, \"amount\": 100, \"status\": \"VERIFIED\"}, {\"id\": 2, \"amount\": 250, \"status\": \"PENDING_AUDIT\"}, {\"id\": 3, \"amount\": 150, \"status\": \"VERIFIED\"}]`.",
+      "prompt": "Prepare the next payout from the invoices in {WORKSPACE}/invoices.json. Only VERIFIED invoices are payable. Put the payable total as a number in payout.json, and the excluded invoice IDs as an array in excluded.json.",
       "state_checks": [
         {
-          "type": "json_key_count",
+          "type": "json_equals",
+          "path": "payout.json",
+          "expected": 250
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "excluded.json",
+          "expected": [
+            2
+          ]
+        },
+        {
+          "type": "json_equals",
           "path": "invoices.json",
-          "expected": 3
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 1
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "invoices.json",
-            "created",
-            "250"
+          "expected": [
+            {
+              "id": 1,
+              "amount": 100,
+              "status": "VERIFIED"
+            },
+            {
+              "id": 2,
+              "amount": 250,
+              "status": "PENDING_AUDIT"
+            },
+            {
+              "id": 3,
+              "amount": 150,
+              "status": "VERIFIED"
+            }
           ]
         }
-      ]
+      ],
+      "process_checks": [],
+      "output_checks": [],
+      "pre_turn_perturbations": [
+        {
+          "type": "write_file",
+          "path": "invoices.json",
+          "content": "[\n  {\n    \"id\": 1,\n    \"amount\": 100,\n    \"status\": \"VERIFIED\"\n  },\n  {\n    \"id\": 2,\n    \"amount\": 250,\n    \"status\": \"PENDING_AUDIT\"\n  },\n  {\n    \"id\": 3,\n    \"amount\": 150,\n    \"status\": \"VERIFIED\"\n  }\n]\n"
+        }
+      ],
+      "reference": {
+        "actions": [
+          {
+            "tool": "read_file",
+            "arguments": {
+              "path": "{WORKSPACE}/invoices.json"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/payout.json",
+              "content": "250\n"
+            }
+          },
+          {
+            "tool": "write_file",
+            "arguments": {
+              "path": "{WORKSPACE}/excluded.json",
+              "content": "[\n  2\n]\n"
+            }
+          }
+        ],
+        "final_response": "Completed the requested update."
+      }
     },
     {
       "turn_number": 2,
-      "prompt": "Read `{WORKSPACE}/audit_result.json` to update the status of invoice 2 in `{WORKSPACE}/invoices.json`, and then write ONLY the numeric sum of `VERIFIED` invoices into `{WORKSPACE}/payout.txt`.",
+      "prompt": "The auditor's decision is now in audit_result.json. Please bring the invoice register and payout files up to date.",
+      "state_checks": [
+        {
+          "type": "json_array_unordered",
+          "path": "invoices.json",
+          "expected": [
+            {
+              "id": 1,
+              "amount": 100,
+              "status": "VERIFIED"
+            },
+            {
+              "id": 2,
+              "amount": 250,
+              "status": "REJECTED"
+            },
+            {
+              "id": 3,
+              "amount": 150,
+              "status": "VERIFIED"
+            }
+          ]
+        },
+        {
+          "type": "json_equals",
+          "path": "payout.json",
+          "expected": 250
+        },
+        {
+          "type": "json_array_unordered",
+          "path": "excluded.json",
+          "expected": [
+            2
+          ]
+        }
+      ],
+      "process_checks": [],
+      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
           "path": "audit_result.json",
-          "content": "{\"id\": 2, \"new_status\": \"REJECTED\"}"
-        }
-      ],
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "payout.txt",
-          "expected": "250"
-        },
-        {
-          "type": "file_not_contains",
-          "path": "payout.txt",
-          "expected": "500"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 2
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_any",
-          "values": [
-            "250",
-            "rejected"
-          ]
-        }
-      ]
-    },
-    {
-      "turn_number": 3,
-      "prompt": "Read `{WORKSPACE}/payout.txt` and tell me which invoice ID was excluded and why.",
-      "state_checks": [
-        {
-          "type": "file_contains",
-          "path": "payout.txt",
-          "expected": "250"
-        }
-      ],
-      "process_checks": [
-        {
-          "type": "min_total_tool_calls",
-          "count": 0
-        }
-      ],
-      "output_checks": [
-        {
-          "type": "contains_all",
-          "values": [
-            "2",
-            "reject"
-          ]
+          "content": "{\n  \"id\": 2,\n  \"new_status\": \"REJECTED\"\n}\n"
         }
       ]
     }

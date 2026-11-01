@@ -52,7 +52,8 @@
                   "state_append_and_optional_error",
                   "state_kv_write_and_optional_error",
                   "unverified_race_deduct",
-                  "static_return"
+                  "static_return",
+                  "stateful_service"
                 ]
               },
               "target_file": {
@@ -81,9 +82,174 @@
               "read_target_file": {
                 "type": "boolean",
                 "default": false
+              },
+              "service": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "operation": {
+                "enum": [
+                  "read",
+                  "lookup",
+                  "transition",
+                  "compare_and_swap",
+                  "append",
+                  "idempotent_append"
+                ]
+              },
+              "initial_state": {
+                "type": "object"
+              },
+              "requires": {
+                "type": "object"
+              },
+              "updates": {
+                "type": "object"
+              },
+              "rejection": {
+                "type": "object"
+              },
+              "transient_failures": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20
+              },
+              "failure_response": {
+                "type": "object"
+              },
+              "lookup_arg": {
+                "type": "string"
+              },
+              "responses": {
+                "type": "object"
+              },
+              "idempotency_field": {
+                "type": "string"
+              },
+              "receipt_prefix": {
+                "type": "string",
+                "minLength": 1
+              },
+              "requires_arguments": {
+                "type": "object"
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "receipt_prefix"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "operation"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "stateful_service"
+                    },
+                    "operation": {
+                      "const": "idempotent_append"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "stateful_service"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "service",
+                    "operation"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "stateful_service"
+                    },
+                    "operation": {
+                      "const": "lookup"
+                    }
+                  },
+                  "required": [
+                    "operation"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "lookup_arg",
+                    "responses"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "stateful_service"
+                    },
+                    "operation": {
+                      "const": "idempotent_append"
+                    }
+                  },
+                  "required": [
+                    "operation"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "idempotency_field"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "transient_failures"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "failure_response"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "stateful_service"
+                    },
+                    "operation": {
+                      "enum": [
+                        "read",
+                        "lookup"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "operation"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "fail_before_write": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "additionalProperties": false
@@ -128,7 +294,8 @@
                     "mkdir",
                     "set_fault_flag",
                     "compress_context",
-                    "truncate_history"
+                    "truncate_history",
+                    "set_mock_state"
                   ]
                 },
                 "path": {
@@ -153,6 +320,12 @@
                 "use_native_compressor": {
                   "type": "boolean",
                   "default": false
+                },
+                "service": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
                 }
               },
               "additionalProperties": false,
@@ -161,7 +334,10 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "write_file"
+                        "enum": [
+                          "write_file",
+                          "append_file"
+                        ]
                       }
                     }
                   },
@@ -176,22 +352,10 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "append_file"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "path",
-                      "content"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "delete_file"
+                        "enum": [
+                          "delete_file",
+                          "mkdir"
+                        ]
                       }
                     }
                   },
@@ -220,20 +384,6 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "mkdir"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "path"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
                         "const": "set_fault_flag"
                       }
                     }
@@ -241,6 +391,21 @@
                   "then": {
                     "required": [
                       "flag_name"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "set_mock_state"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "service",
+                      "values"
                     ]
                   }
                 }
@@ -260,7 +425,8 @@
                   "type": "string",
                   "enum": [
                     "chmod",
-                    "set_fault_flag"
+                    "set_fault_flag",
+                    "set_mock_state"
                   ]
                 },
                 "path": {
@@ -274,6 +440,12 @@
                 },
                 "flag_value": {
                   "type": "boolean"
+                },
+                "service": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
                 }
               },
               "additionalProperties": false,
@@ -304,6 +476,21 @@
                   "then": {
                     "required": [
                       "flag_name"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "set_mock_state"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "service",
+                      "values"
                     ]
                   }
                 }
@@ -330,7 +517,21 @@
                     "file_substring_count",
                     "json_path_equals",
                     "json_valid",
-                    "json_key_count"
+                    "json_key_count",
+                    "json_equals",
+                    "json_array_unordered",
+                    "file_sha256",
+                    "directory_files",
+                    "mock_state_equals",
+                    "mock_effects_equal",
+                    "mock_state_contains",
+                    "mock_state_not_contains",
+                    "python_syntax",
+                    "mock_array_unordered",
+                    "mock_text_matches_file",
+                    "mock_json_matches_file",
+                    "csv_rows_equal",
+                    "python_ast_equals"
                   ]
                 },
                 "path": {
@@ -342,7 +543,23 @@
                 "substring": {
                   "type": "string"
                 },
-                "expected": {}
+                "expected": {},
+                "numeric_columns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "file_json_path": {
+                  "type": "string"
+                },
+                "file_version": {
+                  "enum": [
+                    "before_turn",
+                    "after_turn"
+                  ]
+                }
               },
               "additionalProperties": false,
               "allOf": [
@@ -350,7 +567,12 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "file_exists"
+                        "enum": [
+                          "file_exists",
+                          "file_not_exists",
+                          "json_valid",
+                          "python_syntax"
+                        ]
                       }
                     }
                   },
@@ -364,66 +586,13 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "file_not_exists"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "path"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "file_contains"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "path",
-                      "expected"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "file_not_contains"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "path",
-                      "expected"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "file_exact_lines"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "path",
-                      "expected"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "file_line_count"
+                        "enum": [
+                          "file_contains",
+                          "file_not_contains",
+                          "file_exact_lines",
+                          "file_line_count",
+                          "json_key_count"
+                        ]
                       }
                     }
                   },
@@ -470,12 +639,13 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "json_valid"
+                        "const": "json_equals"
                       }
                     }
                   },
                   "then": {
                     "required": [
+                      "expected",
                       "path"
                     ]
                   }
@@ -484,7 +654,213 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "json_key_count"
+                        "const": "json_array_unordered"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "expected": {
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "expected",
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "file_sha256"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "expected": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "expected",
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "directory_files"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "expected": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "uniqueItems": true
+                      }
+                    },
+                    "required": [
+                      "expected",
+                      "path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "mock_state_equals"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "expected",
+                      "json_path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "mock_effects_equal"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "expected": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "expected"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "enum": [
+                          "mock_state_contains",
+                          "mock_state_not_contains"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "json_path",
+                      "expected"
+                    ],
+                    "properties": {
+                      "expected": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "mock_array_unordered"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "json_path",
+                      "expected"
+                    ],
+                    "properties": {
+                      "expected": {
+                        "type": "array"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "enum": [
+                          "mock_text_matches_file",
+                          "mock_json_matches_file"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "json_path",
+                      "path"
+                    ],
+                    "properties": {}
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "mock_json_matches_file"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "file_json_path"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "file_json_path"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "type": {
+                        "const": "mock_json_matches_file"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "file_version"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "type": {
+                        "const": "mock_text_matches_file"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "csv_rows_equal"
                       }
                     }
                   },
@@ -492,7 +868,35 @@
                     "required": [
                       "path",
                       "expected"
-                    ]
+                    ],
+                    "properties": {
+                      "expected": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "python_ast_equals"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected"
+                    ],
+                    "properties": {
+                      "expected": {
+                        "type": "string"
+                      }
+                    }
                   }
                 }
               ]
@@ -516,7 +920,9 @@
                     "any_tool_called",
                     "tool_call_count_equals",
                     "tool_called_before",
-                    "arguments_not_contain"
+                    "tool_called_after_last",
+                    "arguments_not_contain",
+                    "min_tool_call_count"
                   ]
                 },
                 "tool_name": {
@@ -526,6 +932,9 @@
                   "type": "string"
                 },
                 "second_tool": {
+                  "type": "string"
+                },
+                "after_tool": {
                   "type": "string"
                 },
                 "tool_names": {
@@ -549,7 +958,10 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "min_total_tool_calls"
+                        "enum": [
+                          "min_total_tool_calls",
+                          "max_total_tool_calls"
+                        ]
                       }
                     }
                   },
@@ -563,35 +975,10 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "max_total_tool_calls"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "count"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "tool_called"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "tool_name"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "tool_not_called"
+                        "enum": [
+                          "tool_called",
+                          "tool_not_called"
+                        ]
                       }
                     }
                   },
@@ -619,7 +1006,10 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "tool_call_count_equals"
+                        "enum": [
+                          "tool_call_count_equals",
+                          "min_tool_call_count"
+                        ]
                       }
                     }
                   },
@@ -659,6 +1049,35 @@
                       "forbidden_substring"
                     ]
                   }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "tool_called_after_last"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "tool_name",
+                      "after_tool"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "after_tool"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "type": {
+                        "const": "tool_called_after_last"
+                      }
+                    }
+                  }
                 }
               ]
             }
@@ -677,7 +1096,8 @@
                     "contains_any",
                     "contains_all",
                     "not_contains",
-                    "regex_match"
+                    "regex_match",
+                    "json_answer"
                   ]
                 },
                 "values": {
@@ -689,6 +1109,13 @@
                 },
                 "pattern": {
                   "type": "string"
+                },
+                "expected": {},
+                "json_path": {
+                  "type": "string"
+                },
+                "unordered": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false,
@@ -697,35 +1124,11 @@
                   "if": {
                     "properties": {
                       "type": {
-                        "const": "contains_any"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "values"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "contains_all"
-                      }
-                    }
-                  },
-                  "then": {
-                    "required": [
-                      "values"
-                    ]
-                  }
-                },
-                {
-                  "if": {
-                    "properties": {
-                      "type": {
-                        "const": "not_contains"
+                        "enum": [
+                          "contains_any",
+                          "contains_all",
+                          "not_contains"
+                        ]
                       }
                     }
                   },
@@ -748,8 +1151,54 @@
                       "pattern"
                     ]
                   }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "json_answer"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "expected"
+                    ]
+                  }
                 }
               ]
+            }
+          },
+          "reference": {
+            "type": "object",
+            "required": [
+              "actions",
+              "final_response"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "tool",
+                    "arguments"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "tool": {
+                      "type": "string"
+                    },
+                    "arguments": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "final_response": {
+                "type": "string"
+              }
             }
           }
         },
