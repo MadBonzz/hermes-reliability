@@ -6,7 +6,10 @@ import io
 import json
 import os
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,9 +22,10 @@ from src.evaluation.agent_container import (
     docker_command,
     inference_relay,
 )
+from src.evaluation.api_trace import APITrace
 from src.evaluation.artifact_checks import evaluate_artifact_check
 from src.evaluation.audit import audit_campaign
-from src.evaluation.eval_container_worker import execute, materialize
+from src.evaluation.eval_container_worker import execute, materialize, output_snapshot
 from src.evaluation.evaluation_metrics import efficiency
 from src.evaluation.runtime_support import read_jsonl
 from src.orchestrator.container_worker import main as native_validation_main
@@ -30,7 +34,108 @@ from src.orchestrator.transcripts import render_phase
 from src.orchestrator.workspace import Workspace
 
 
+def async_transport(send):
+    async def transport(client, request):
+        return send(client, request)
+
+    return transport
+
+
 class ContainerProtocolTests(unittest.TestCase):
+    def test_output_snapshot_keeps_only_native_outputs_and_rejects_root_links(self):
+        snapshot = {
+            "outputs": {"kind": "directory"},
+            "outputs/report.txt": {"kind": "file", "text": "right"},
+            "uploads/report.txt": {"kind": "file", "text": "wrong"},
+        }
+        self.assertEqual(output_snapshot(snapshot), {"report.txt": snapshot["outputs/report.txt"]})
+        snapshot["outputs"] = {"kind": "symlink", "target": "uploads"}
+        with self.assertRaisesRegex(ValueError, "not a link"):
+            output_snapshot(snapshot)
+
+    def test_native_error_cancels_pending_relay_and_logs_cancellation(self):
+        cancellation = threading.Event()
+        started = threading.Event()
+        cancelled = threading.Event()
+        container = object.__new__(AgentContainer)
+        container.cancel_inference = cancellation.set
+        container.futures = []
+        replies = []
+        container._send = replies.append
+        payload = {"model": "target", "messages": [{"role": "user", "content": "task"}]}
+
+        async def stalled(client, request):
+            self.assertEqual(json.loads(request.content), payload)
+            started.set()
+            try:
+                await asyncio.sleep(60)
+            finally:
+                cancelled.set()
+
+        def next_event():
+            if not container.futures:
+                return {
+                    "event": "rpc",
+                    "kind": "inference",
+                    "id": "rpc",
+                    "payload": {"body": payload},
+                }
+            self.assertTrue(started.wait(3), "relay did not dispatch")
+            return {
+                "event": "result",
+                "id": replies[0]["id"],
+                "error": "memory shutdown deadline exceeded",
+                "traceback": "native traceback",
+            }
+
+        container._next = next_event
+        container.inference = lambda value: inference_relay(
+            {"model": "target", "base_url": "https://provider.invalid/v1"},
+            "test-key",
+            value,
+            cancel_event=cancellation,
+        )
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            ThreadPoolExecutor(max_workers=1) as pool,
+            patch.object(httpx.AsyncClient, "_send_single_request", stalled),
+        ):
+            container.pool = pool
+            path = Path(temporary) / "api.jsonl"
+            with APITrace(path, run_id="probe", scenario_id="shutdown"):
+                start = time.monotonic()
+                with self.assertRaisesRegex(
+                    NativeExecutionError, "memory shutdown deadline"
+                ) as failure:
+                    container.call("close")
+                self.assertLess(time.monotonic() - start, 3)
+            self.assertTrue(cancelled.is_set())
+            self.assertIsInstance(failure.exception.__cause__, ExceptionGroup)
+            events = read_jsonl(path)
+            self.assertEqual(sum(e["event"] == "api_request" for e in events), 1)
+            errors = [e for e in events if e["event"] == "api_request_error"]
+            self.assertEqual(len(errors), 1)
+            self.assertIn("CancelledError", errors[0]["error"])
+            self.assertEqual(events[-1]["event"], "api_capture_end")
+
+    def test_cancellable_relay_success_preserves_payload_and_has_no_output_cap(self):
+        requests = []
+        payload = {"model": "target", "messages": [{"role": "user", "content": "hello"}]}
+
+        async def send(client, request):
+            requests.append(json.loads(request.content))
+            return httpx.Response(200, content=b'{"choices":[]}', request=request)
+
+        with patch.object(httpx.AsyncClient, "_send_single_request", send):
+            response = inference_relay(
+                {"model": "target", "base_url": "https://provider.invalid/v1"},
+                "test-key",
+                {"body": payload},
+                cancel_event=threading.Event(),
+            )
+        self.assertEqual(requests, [payload])
+        self.assertEqual(base64.b64decode(response["body_base64"]), b'{"choices":[]}')
+
     def test_cleanup_failure_keeps_nested_cause_and_prior_gate_outcome(self):
         class CleanupFailure:
             def __init__(self, *args):
@@ -351,6 +456,217 @@ class ContainerProtocolTests(unittest.TestCase):
 class NativeContainerTests(unittest.TestCase):
     """Real native tools/history with deterministic inference, never a fake agent."""
 
+    @unittest.skipUnless(
+        os.environ.get("NATIVE_AGENT_TEST_KIND") == "deerflow", "DeerFlow native outputs only"
+    )
+    def test_native_output_scope_matches_real_deerflow_deliverables(self):
+        requests = []
+
+        def send(client, request):
+            body = json.loads(request.content)
+            requests.append(body)
+            message = {"role": "assistant", "content": "Report ready."}
+            if not body.get("tools"):
+                message["content"] = json.dumps(
+                    {
+                        "user": {},
+                        "history": {},
+                        "newFacts": [],
+                        "factsToRemove": [],
+                        "factsToReinforce": [],
+                    }
+                )
+            elif not any(m.get("tool_call_id") == "deliverable" for m in body["messages"]):
+                message = {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "deliverable",
+                            "type": "function",
+                            "function": {
+                                "name": "write_file",
+                                "arguments": json.dumps(
+                                    {
+                                        "path": "/mnt/user-data/outputs/report.json",
+                                        "content": '{"count":7}',
+                                    }
+                                ),
+                            },
+                        }
+                    ],
+                }
+            response = self.reply({"body": body}, message, len(requests))
+            return httpx.Response(
+                200,
+                content=base64.b64decode(response["body_base64"]),
+                headers=response["headers"],
+                request=request,
+            )
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(httpx.Client, "_send_single_request", send),
+            patch.object(httpx.AsyncClient, "_send_single_request", async_transport(send)),
+        ):
+            root = Path(temporary)
+            report = execute(
+                {
+                    "scenario": {
+                        "id": "native_outputs",
+                        "name": "Native outputs",
+                        "property_tested": "Explicit artifact scope",
+                        "turns": [
+                            {
+                                "turn_number": 1,
+                                "prompt": "Save a final report.json containing count 7.",
+                                "pre_turn_perturbations": [
+                                    {
+                                        "type": "write_file",
+                                        "path": "report.json",
+                                        "content": '{"count":99}',
+                                    }
+                                ],
+                                "state_checks": [
+                                    {
+                                        "type": "json_equals",
+                                        "path": "report.json",
+                                        "expected": {"count": 7},
+                                        "artifact_scope": "outputs",
+                                    },
+                                    {
+                                        "type": "json_equals",
+                                        "path": "report.json",
+                                        "expected": {"count": 99},
+                                    },
+                                ],
+                                "process_checks": [],
+                                "output_checks": [],
+                            }
+                        ],
+                    },
+                    "output": str(root / "evidence"),
+                    "runtime_root": str(root / "runtime"),
+                    "runtime_image": os.environ["NATIVE_AGENT_TEST_IMAGE"],
+                    "agent_kind": "deerflow",
+                    "run_id": "integration",
+                    "model": "command-a-03-2025",
+                    "base_url": "https://model.invalid/v1",
+                }
+            )
+            self.assertEqual(report["status"], "passed", report.get("harness_errors"))
+            turn = report["turns"][0]
+            self.assertEqual(
+                json.loads(turn["workspace_after_agent"]["report.json"]["text"]), {"count": 99}
+            )
+            self.assertEqual(
+                json.loads(turn["auxiliary_workspace_after_agent"]["outputs/report.json"]["text"]),
+                {"count": 7},
+            )
+            self.assertIn("artifact_scope=outputs", turn["state_check"]["details"][0])
+            summary = root / "summary.json"
+            summary.write_text(
+                json.dumps({"cases": [{"id": "native_outputs", "branches": {"ordinary": report}}]})
+            )
+            audited = audit_campaign(summary)
+            self.assertTrue(audited["passed"], audited["errors"])
+
+    @unittest.skipUnless(
+        os.environ.get("NATIVE_AGENT_TEST_KIND", "openhands") == "openhands",
+        "OpenHands native schema rejection only",
+    )
+    def test_schema_rejections_are_attempts_with_native_error_evidence(self):
+        requests = []
+        calls = [
+            ("task_tracker", "{bad json"),
+            ("task_tracker", json.dumps({"command": "view", "description": "extra"})),
+            ("task_tracker", json.dumps({"command": "view"})),
+            ("finish", json.dumps({"message": "Done."})),
+        ]
+
+        def send(client, request):
+            body = json.loads(request.content)
+            name, arguments = calls[len(requests)]
+            requests.append(body)
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": f"call-{len(requests)}",
+                        "type": "function",
+                        "function": {"name": name, "arguments": arguments},
+                    }
+                ],
+            }
+            response = self.reply({"body": body}, message, len(requests))
+            return httpx.Response(
+                200,
+                content=base64.b64decode(response["body_base64"]),
+                headers=response["headers"],
+                request=request,
+            )
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.object(httpx.Client, "_send_single_request", send),
+            patch.object(httpx.AsyncClient, "_send_single_request", async_transport(send)),
+        ):
+            root = Path(temporary)
+            report = execute(
+                {
+                    "scenario": {
+                        "id": "native_rejections",
+                        "name": "Native rejections",
+                        "property_tested": "Attempt capture",
+                        "turns": [
+                            {
+                                "turn_number": 1,
+                                "prompt": "Check my task list.",
+                                "state_checks": [],
+                                "process_checks": [
+                                    {
+                                        "type": "min_tool_call_count",
+                                        "tool_name": "task_tracker",
+                                        "count": 3,
+                                    }
+                                ],
+                                "output_checks": [],
+                            }
+                        ],
+                    },
+                    "output": str(root / "evidence"),
+                    "runtime_root": str(root / "runtime"),
+                    "runtime_image": os.environ["NATIVE_AGENT_TEST_IMAGE"],
+                    "agent_kind": "openhands",
+                    "run_id": "integration",
+                    "model": "command-a-03-2025",
+                    "base_url": "https://model.invalid/v1",
+                }
+            )
+            self.assertEqual(report["status"], "passed", report.get("runtime_errors"))
+            turn = report["turns"][0]
+            self.assertEqual(len(turn["tool_calls"]), 4)
+            self.assertEqual(len(turn["execution_events"]), 2)
+            self.assertTrue(all(e["completed"] for e in turn["execution_events"]))
+            self.assertEqual(turn["tool_call_coverage"]["attempts_without_execution_callback"], 2)
+            events = read_jsonl(turn["trace_path"])
+            rejected = [e for e in events if e["event"] == "tool_rejected"]
+            self.assertEqual([e["id"] for e in rejected], ["call-1", "call-2"])
+            self.assertTrue(all(not e["execution_observed"] for e in rejected))
+            self.assertTrue(all(e["native_result"]["kind"] == "AgentErrorEvent" for e in rejected))
+            self.assertIn("Extra inputs are not permitted", rejected[1]["error"])
+            summary = root / "summary.json"
+            summary.write_text(
+                json.dumps(
+                    {"cases": [{"id": "native_rejections", "branches": {"ordinary": report}}]}
+                )
+            )
+            audited = audit_campaign(summary)
+            self.assertTrue(audited["passed"], audited["errors"])
+            rendered = render_phase(root / "evidence/report.json")
+            self.assertIn("Extra inputs are not permitted", rendered)
+
     def test_full_reference_preflight_checks_final_artifact_behavior(self):
         agent = os.environ.get("NATIVE_AGENT_TEST_KIND", "openhands")
         requests = []
@@ -385,6 +701,11 @@ class NativeContainerTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.object(httpx.Client, "_send_single_request", send),
+            patch.object(
+                httpx.AsyncClient,
+                "_send_single_request",
+                async_transport(send),
+            ),
         ):
             root = Path(temporary)
             workspace = Workspace(root / "working", Path(__file__).resolve().parents[1])
@@ -648,6 +969,11 @@ for exit_code in (0, 22):
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.object(httpx.Client, "_send_single_request", send),
+            patch.object(
+                httpx.AsyncClient,
+                "_send_single_request",
+                async_transport(send),
+            ),
         ):
             root = Path(temporary)
             report = execute(
@@ -685,7 +1011,11 @@ for exit_code in (0, 22):
                 }
             )
             self.assertEqual(report["harness_errors"], [])
-            self.assertEqual(report["status"], "failed")
+            self.assertEqual(
+                report["status"],
+                "failed",
+                str(report.get("harness_errors")) + str(report.get("runtime_errors")),
+            )
             turn = report["turns"][0]
             self.assertEqual(turn["workspace_after_agent"]["app.py"]["text"], "value = 7")
             self.assertFalse(turn["state_check"]["passed"])
@@ -1030,6 +1360,11 @@ for exit_code in (0, 22):
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.object(httpx.Client, "_send_single_request", send),
+            patch.object(
+                httpx.AsyncClient,
+                "_send_single_request",
+                async_transport(send),
+            ),
         ):
             root = Path(temporary)
             report = execute(
@@ -1073,7 +1408,11 @@ for exit_code in (0, 22):
                 }
             )
             self.assertEqual(report["harness_errors"], [])
-            self.assertEqual(report["status"], "failed")
+            self.assertEqual(
+                report["status"],
+                "failed",
+                str(report.get("harness_errors")) + str(report.get("runtime_errors")),
+            )
             turn = report["turns"][0]
             self.assertEqual(turn["workspace_after_agent"]["guarded.txt"]["text"], "original")
             self.assertTrue(turn["state_check"]["passed"])

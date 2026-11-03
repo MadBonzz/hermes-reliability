@@ -5,8 +5,10 @@ import difflib
 import json
 import shutil
 import tempfile
+import uuid
 from pathlib import Path
 
+from src.evaluation.artifact_checks import evaluate_artifact_check
 from src.evaluation.benchmark import condition_spec, validate_benchmark
 from src.evaluation.checks import (
     evaluate_output_checks,
@@ -16,9 +18,21 @@ from src.evaluation.checks import (
 from src.evaluation.runtime_support import sha256_file
 from src.evaluation.scenario_validation import external_schema_ref
 from src.evaluation.utils import resolve_ws_path
+from src.orchestrator.quality import check_catalog
 
 
 class Workspace:
+    # Protocol-level edit protection, not an OS sandbox. Candidate Python remains
+    # executable; external frozen audits and revision hashes are still required.
+    PROTECTED = {
+        "api_trace.py",
+        "audit.py",
+        "audit_api_evidence.py",
+        "runtime_support.py",
+        "control_observer.py",
+        "execution_isolation.py",
+    }
+
     @classmethod
     def clone(cls, root, template):
         """Copy a saved campaign including authored scenarios and regression tests."""
@@ -141,6 +155,14 @@ class Workspace:
         operation = request["op"]
         if operation == "list":
             return self.inventory()
+        if operation == "validate":
+            cases = self.validate(getattr(self, "active_limit", 12))
+            return {
+                "valid": True,
+                "scenario_count": len(cases),
+                "check_catalog": check_catalog(cases),
+                "scope": "Schema, source syntax and contract references only; no model, native reference execution or semantic oracle validation.",
+            }
         if operation == "probe":
             return self.probe(request)
         path = self.path(request["path"])
@@ -157,6 +179,10 @@ class Workspace:
             }
         if readonly:
             raise ValueError("Reviewers have read-only access")
+        if path.parent == self.root / "src/evaluation" and path.name in self.PROTECTED:
+            raise ValueError(
+                "Measurement and evidence-policy code is read-only; propose a separately reviewed change"
+            )
         if path.name in {"scenario.schema.json"}:
             raise ValueError("The benchmark schema is fixed for both evaluator lanes")
         if operation == "write":
@@ -184,7 +210,7 @@ class Workspace:
         return {"path": request["path"], "sha256": sha256_file(path)}
 
     def probe(self, request):
-        """Test supplied examples with trusted built-in oracles; never execute task code."""
+        """Test examples with trusted oracles; executable checks stay in Docker."""
         path = self.path(request["path"])
         if path.parent != self.root / "scenarios" or path.suffix != ".json":
             raise ValueError("Probe requires a scenario JSON path")
@@ -202,7 +228,41 @@ class Workspace:
                 "Describe why this example should pass or fail, with expect_pass boolean"
             )
         turn = spec["turns"][number - 1]
-        if any(c["type"] == "artifact_python" for c in turn.get("state_checks", [])):
+        available = {
+            ref: check
+            for ref, check in check_catalog([original])[original["id"]].items()
+            if ref.startswith(f"{condition}:{number}:")
+        }
+        selected = request.get("check_ids", list(available))
+        if (
+            not isinstance(selected, list)
+            or not selected
+            or not all(isinstance(ref, str) for ref in selected)
+            or len(selected) != len(set(selected))
+            or not set(selected).issubset(available)
+        ):
+            raise ValueError(
+                "check_ids must select unique current assertions for this condition and turn"
+            )
+        selected_set = set(selected)
+        # Preserve contract order and indexes, even if the selection is reordered.
+        selected = [ref for ref in available if ref in selected_set]
+        turn = {
+            **turn,
+            **{
+                group + "_checks": [
+                    check
+                    for index, check in enumerate(turn.get(group + "_checks", []))
+                    if f"{condition}:{number}:{group}:{index}" in selected_set
+                ]
+                for group in ("state", "process", "output")
+            },
+        }
+        artifact_checks = [
+            c for c in turn.get("state_checks", []) if c["type"] == "artifact_python"
+        ]
+        artifact_runtime = getattr(self, "artifact_runtime", None)
+        if artifact_checks and not artifact_runtime:
             raise ValueError(
                 "artifact_python requires isolated Docker verification; this host-only probe "
                 "cannot execute it. Use native reference validation and isolated counterexamples."
@@ -210,8 +270,24 @@ class Workspace:
         files = request.get("files", {})
         if not isinstance(files, dict) or not all(isinstance(v, str) for v in files.values()):
             raise ValueError("Probe files must map workspace-relative paths to text")
+        output_files = request.get("output_files", {})
+        if not isinstance(output_files, dict) or not all(
+            isinstance(v, str) for v in output_files.values()
+        ):
+            raise ValueError("Probe output_files must map outputs-relative paths to text")
+        output_scope = any(
+            c.get("artifact_scope") == "outputs" for c in turn.get("state_checks", [])
+        )
+        if output_files or output_scope:
+            if getattr(self, "runtime_kind", "hermes") != "deerflow":
+                raise ValueError("Native output probes require the DeerFlow profile")
+            if any(c.get("artifact_scope") == "outputs" for c in artifact_checks):
+                raise ValueError("artifact_python currently uses the task workspace")
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
+            root = Path(temporary).resolve() / "workspace"
+            root.mkdir()
+            outputs = root.parent / "outputs"
+            outputs.mkdir()
             # Checks never follow author-supplied paths outside this fresh fixture tree.
             for check in turn.get("state_checks", []):
                 if "path" in check:
@@ -223,16 +299,19 @@ class Workspace:
                             c in identity for c in ("/", "\\", ":")
                         ):
                             raise ValueError("Probe settlement invoice IDs must be plain filenames")
-            for name, content in files.items():
-                target = resolve_ws_path(root, name)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(content, encoding="utf-8", newline="")
+            for directory, contents in ((root, files), (outputs, output_files)):
+                for name, content in contents.items():
+                    target = resolve_ws_path(directory, name)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(content, encoding="utf-8", newline="")
             results = {
                 "state": evaluate_state_checks(
-                    turn.get("state_checks", []),
+                    [c for c in turn.get("state_checks", []) if c["type"] != "artifact_python"],
                     root,
                     mock_snapshot=request.get("mock_snapshot"),
                     before_workspace=request.get("before_workspace"),
+                    artifact_roots={"outputs": outputs} if output_scope else {},
+                    before_artifacts=request.get("before_artifacts"),
                 ),
                 "process": evaluate_process_checks(
                     turn.get("process_checks", []), request.get("calls", [])
@@ -241,17 +320,48 @@ class Workspace:
                     turn.get("output_checks", []), request.get("final_response", "")
                 ),
             }
+        artifact_results = []
+        if artifact_checks:
+            snapshot = {name: {"kind": "file", "text": content} for name, content in files.items()}
+            probe_root = self.root.parent / "oracle_probes" / uuid.uuid4().hex
+            for index, check in enumerate(artifact_checks):
+                observed = evaluate_artifact_check(
+                    check, snapshot, **artifact_runtime, output=probe_root / str(index)
+                )
+                artifact_results.append(observed)
+            results["artifact"] = (
+                all(item["passed"] for item in artifact_results),
+                [
+                    {k: item[k] for k in ("name", "passed", "exit_code", "timed_out")}
+                    for item in artifact_results
+                ],
+            )
         passed = all(ok for ok, _ in results.values())
-        checker = Path(__file__).parents[1] / "evaluation/checks.py"
-        candidate_checker = self.root / "src/evaluation/checks.py"
+        checker_paths = ["src/evaluation/checks.py"]
+        if artifact_checks:
+            checker_paths.append("src/evaluation/artifact_checks.py")
+        checker_evidence = {}
+        for relative in checker_paths:
+            trusted_path = Path(__file__).parents[2] / relative
+            candidate_path = self.root / relative
+            trusted_hash = sha256_file(trusted_path)
+            candidate_hash = sha256_file(candidate_path) if candidate_path.exists() else None
+            checker_evidence[relative] = {
+                "trusted_sha256": trusted_hash,
+                "candidate_sha256": candidate_hash,
+                "matches": trusted_hash == candidate_hash,
+            }
         return {
             "scenario_sha256": sha256_file(path),
             "condition": condition,
             "turn_number": number,
-            "scope": "Trusted built-in oracles on supplied synthetic artifacts, calls and response. No tools, model, native runtime, candidate code or task code executed. This does not establish end-to-end feasibility or semantic validity of the supplied example.",
-            "checker_sha256": sha256_file(checker),
-            "candidate_checker_matches": candidate_checker.exists()
-            and sha256_file(candidate_checker) == sha256_file(checker),
+            "selected_check_ids": selected,
+            "unselected_check_ids": [ref for ref in available if ref not in selected_set],
+            "scope": "Trusted checkers on supplied synthetic artifacts, calls and response. No model or agent trajectory. If artifact_checks is nonempty, authored checks and supplied code run only in isolated copies in the pinned Docker image; never on the host. This does not establish end-to-end feasibility or semantic validity of the supplied example.",
+            "artifact_checks": artifact_results,
+            "checker_sha256": checker_evidence["src/evaluation/checks.py"]["trusted_sha256"],
+            "checker_evidence": checker_evidence,
+            "candidate_checker_matches": all(item["matches"] for item in checker_evidence.values()),
             "passed": passed,
             "matches_expectation": passed == request["expect_pass"],
             "checks": {

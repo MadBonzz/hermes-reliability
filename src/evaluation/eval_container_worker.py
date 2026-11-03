@@ -98,6 +98,17 @@ def file_changes(before, root):
     return changes
 
 
+def output_snapshot(auxiliary):
+    """Select native outputs without aliasing similarly named workspace paths."""
+    if "outputs" in auxiliary and auxiliary["outputs"].get("kind") != "directory":
+        raise ValueError("Native outputs root must be a directory, not a link or file")
+    return {
+        name.removeprefix("outputs/"): value
+        for name, value in auxiliary.items()
+        if name.startswith("outputs/")
+    }
+
+
 def execute(config):
     spec = config["scenario"]
     out = Path(config["output"])
@@ -226,13 +237,15 @@ def execute(config):
             return {"result": result, "file_changes": changes}
 
     target = {"model": config["model"], "base_url": config["base_url"]}
+    relay_cancel = threading.Event()
     container = AgentContainer(
         config["runtime_image"],
         out,
-        lambda payload: inference_relay(target, key, payload),
+        lambda payload: inference_relay(target, key, payload, cancel_event=relay_cancel),
         mock,
         observe,
     )
+    container.cancel_inference = relay_cancel.set
 
     def perturb(operations):
         evidence = []
@@ -381,8 +394,21 @@ def execute(config):
                     trace.record("agent_result", result=result)
                     api.raise_if_failed()
                     after = container.call("snapshot")
+                    after_auxiliary = container.call("auxiliary_snapshot")
+                    record["auxiliary_workspace_after_agent"] = after_auxiliary
                     services = manager.services.snapshot()
                     materialize(root, after)
+                    artifact_roots, before_artifacts = {}, {}
+                    if config["agent_kind"] == "deerflow" and any(
+                        check.get("artifact_scope") == "outputs"
+                        for check in turn.get("state_checks", [])
+                    ):
+                        outputs_root = root.parent / "outputs"
+                        materialize(outputs_root, output_snapshot(after_auxiliary))
+                        artifact_roots["outputs"] = outputs_root
+                        before_artifacts["outputs"] = output_snapshot(
+                            record["auxiliary_workspace_before_agent"]
+                        )
                     state_ok, state_details = True, []
                     artifact_results = record["artifact_checks"] = []
                     for check_index, check in enumerate(turn.get("state_checks", [])):
@@ -404,7 +430,12 @@ def execute(config):
                             trace.record("artifact_check", **checked)
                         else:
                             ok, details = evaluate_state_checks(
-                                [check], root, mock_snapshot=services, before_workspace=before
+                                [check],
+                                root,
+                                mock_snapshot=services,
+                                before_workspace=before,
+                                artifact_roots=artifact_roots,
+                                before_artifacts=before_artifacts,
                             )
                         state_ok = state_ok and ok
                         state_details.extend(details)
@@ -470,9 +501,10 @@ def execute(config):
                             except Exception as exc:
                                 record["harness_errors"].append(f"Turn snapshot failed: {exc}")
                         try:
-                            record["auxiliary_workspace_after_agent"] = container.call(
-                                "auxiliary_snapshot"
-                            )
+                            if "auxiliary_workspace_after_agent" not in record:
+                                record["auxiliary_workspace_after_agent"] = container.call(
+                                    "auxiliary_snapshot"
+                                )
                         except Exception as exc:
                             record["harness_errors"].append(f"Auxiliary snapshot failed: {exc}")
                         api.set_context(number, "post_turn_cleanup")

@@ -4,6 +4,7 @@ No host directories or Docker socket are mounted. Docker copies only the bridge
 code in; protocol messages carry fixtures, tool interfaces and model responses.
 """
 
+import asyncio
 import base64
 import json
 import subprocess
@@ -69,6 +70,7 @@ class AgentContainer:
         self.futures = []
         self.created = False
         self.closed = False
+        self.cancel_inference = None
         self.directory.mkdir(parents=True, exist_ok=True)
         try:
             self._docker(*docker_command(image, self.name)[1:])
@@ -154,11 +156,22 @@ class AgentContainer:
             elif event.get("event") == "result":
                 if event["id"] != ident:
                     raise RuntimeError("Mismatched command result")
+                if event.get("error") and self.cancel_inference:
+                    self.cancel_inference()
+                failures = []
                 for future in self.futures:
-                    future.result()
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        failures.append(exc)
                 self.futures.clear()
                 if event.get("error"):
-                    raise NativeExecutionError(op, event["error"], event.get("traceback", ""))
+                    error = NativeExecutionError(op, event["error"], event.get("traceback", ""))
+                    if failures:
+                        raise error from ExceptionGroup("Outstanding native RPC failures", failures)
+                    raise error
+                if failures:
+                    raise ExceptionGroup("Native RPC failures", failures)
                 return event["result"]
             else:
                 self.observe(event)
@@ -176,6 +189,8 @@ class AgentContainer:
         except Exception as exc:
             errors.append(exc)
         finally:
+            if self.cancel_inference:
+                self.cancel_inference()
             if self.created:
                 try:
                     self._docker("rm", "-f", self.name)
@@ -197,10 +212,12 @@ class AgentContainer:
             raise ExceptionGroup("Native container cleanup failed", errors)
 
 
-def inference_relay(target, key, payload):
+def inference_relay(target, key, payload, *, cancel_event=None):
     body = payload["body"]
     if body.get("model") != target["model"]:
         raise ValueError("Native runtime requested a different model")
+    if cancel_event is not None:
+        return asyncio.run(_cancellable_inference(target, key, body, cancel_event))
     with httpx.Client(timeout=httpx.Timeout(180, read=None)) as client:
         response = client.post(
             target["base_url"].rstrip("/") + "/chat/completions",
@@ -212,3 +229,43 @@ def inference_relay(target, key, payload):
             "headers": dict(response.headers),
             "body_base64": base64.b64encode(response.content).decode("ascii"),
         }
+
+
+async def _cancellable_inference(target, key, body, cancel_event):
+    """Cancel I/O only when the native runtime has failed or is being closed.
+
+    Successful inference keeps its existing unlimited read duration and payload.
+    Async cancellation closes the transport and remains visible to API capture.
+    """
+    if cancel_event.is_set():
+        raise RuntimeError("Inference relay cancelled after native runtime termination")
+
+    async def cancelled():
+        while not cancel_event.is_set():
+            await asyncio.sleep(0.05)
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(180, read=None)) as client:
+        request = asyncio.create_task(
+            client.post(
+                target["base_url"].rstrip("/") + "/chat/completions",
+                headers={"Authorization": "Bearer " + key},
+                json=body,
+            )
+        )
+        cancellation = asyncio.create_task(cancelled())
+        try:
+            done, _ = await asyncio.wait(
+                (request, cancellation), return_when=asyncio.FIRST_COMPLETED
+            )
+            if request not in done:
+                raise RuntimeError("Inference relay cancelled after native runtime termination")
+            response = await request
+            return {
+                "status": response.status_code,
+                "headers": dict(response.headers),
+                "body_base64": base64.b64encode(response.content).decode("ascii"),
+            }
+        finally:
+            request.cancel()
+            cancellation.cancel()
+            await asyncio.gather(request, cancellation, return_exceptions=True)

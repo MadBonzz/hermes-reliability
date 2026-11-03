@@ -178,6 +178,13 @@ def _validate_scenario(scenario, validator, seen, *, runtime_kind="hermes"):
     ]
     for turn in turns:
         for check in turn.get("state_checks", []):
+            if check.get("artifact_scope", "workspace") == "outputs":
+                if runtime_kind != "deerflow" or "path" not in check:
+                    raise ValueError(
+                        f"{sid}: outputs scope requires a DeerFlow file/path assertion"
+                    )
+                if check["type"] == "artifact_python":
+                    raise ValueError(f"{sid}: artifact_python currently uses the task workspace")
             if check["type"] == "artifact_python":
                 if runtime_kind not in {"openhands", "deerflow"}:
                     raise ValueError(f"{sid}: artifact_python requires a native Docker adapter")

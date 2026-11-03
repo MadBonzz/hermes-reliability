@@ -132,6 +132,13 @@ of total elapsed turn time, with no added model tokens or agent tool calls. Sepa
 this evaluator overhead when comparing agent latency. Historical frozen runs and
 the Hermes adapter do not support this optional check.
 
+DeerFlow file assertions can select `artifact_scope: "outputs"` to inspect native
+final deliverables under `/mnt/user-data/outputs`. `path` stays relative to that
+root. The default workspace scope remains unchanged, and neither root falls back
+to the other. Outputs scope is limited to DeerFlow declarative file/path checks;
+private executable checks still use the task workspace. Before-turn file
+comparisons use the snapshot of the selected root.
+
 API usage is reconstructed per request. Streaming usage is counted once per
 request. Input, output and cached-input counts are retained where supplied.
 Requests with missing usage are listed explicitly. Dollar estimates require an

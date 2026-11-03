@@ -14,6 +14,7 @@ from src.evaluation.runtime_support import sha256_file
 from src.orchestrator.adapters import ContainerAdapter, HermesAdapter, make_adapter, revision_hashes
 from src.orchestrator.container_worker import main as native_validation_main
 from src.orchestrator.container_worker import reference_diagnostics
+from src.orchestrator.quality import validate_analysis, validate_review
 from src.orchestrator.runner import (
     Client,
     Evidence,
@@ -22,8 +23,6 @@ from src.orchestrator.runner import (
     review_recovery,
     run,
     target_api_usage,
-    validate_analysis,
-    validate_review,
     validation_evidence,
 )
 from src.orchestrator.transcripts import render_phase
@@ -653,6 +652,31 @@ class OrchestratorTests(unittest.TestCase):
                 (copied.root / "scenarios/task_a.json").read_bytes(),
                 (working.root / "scenarios/task_a.json").read_bytes(),
             )
+            state_path = prior / "campaign.json"
+            stopped = json.loads(state_path.read_text())
+            stopped.update(
+                stop_reason="operator_preempted",
+                preemption_reason="Computed answers were exposed in user requests.",
+            )
+            state_path.write_text(json.dumps(stopped))
+            with patch("src.orchestrator.runner.ROOT", root):
+                recovered = review_recovery(config, Evidence(SecretRedactor()))
+            self.assertEqual(recovered["generation"], 2)
+            self.assertEqual(recovered["round"], 3)
+            self.assertEqual(recovered["prior_stop_reason"], "operator_preempted")
+            self.assertEqual(recovered["state"]["stop_reason"], "error")
+            self.assertNotIn("preemption_reason", recovered["state"])
+            self.assertIn("Computed answers", recovered["feedback"][-1]["description"])
+            self.assertNotEqual(recovered["messages"][0]["content"], "policy")
+            stopped["rounds"][-1]["executions"] = {"candidate": {"status": "error"}}
+            state_path.write_text(json.dumps(stopped))
+            with (
+                patch("src.orchestrator.runner.ROOT", root),
+                self.assertRaisesRegex(ValueError, "cannot resume an execution"),
+            ):
+                review_recovery(config, Evidence(SecretRedactor()))
+            stopped["rounds"][-1]["executions"] = {}
+            state_path.write_text(json.dumps(stopped))
             (working.root / "src/evaluation/new.py").write_text("changed=True")
             with (
                 patch("src.orchestrator.runner.ROOT", root),

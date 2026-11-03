@@ -51,18 +51,40 @@ def _nonblank_lines(path: Path) -> list[str]:
 
 
 def evaluate_state_checks(
-    checks: list[dict[str, Any]], workspace: Path, *, mock_snapshot=None, before_workspace=None
+    checks: list[dict[str, Any]],
+    workspace: Path,
+    *,
+    mock_snapshot=None,
+    before_workspace=None,
+    artifact_roots=None,
+    before_artifacts=None,
 ) -> tuple[bool, list[str]]:
     """Malformed/unreadable agent artifacts fail assertions, not the entire suite."""
     all_ok, details = True, []
     for check in checks:
         try:
+            scope = check.get("artifact_scope", "workspace")
+            selected_root, selected_before = workspace, before_workspace
+            if scope != "workspace":
+                if scope != "outputs" or scope not in (artifact_roots or {}):
+                    raise ValueError(f"Unsupported artifact scope: {scope}")
+                if "path" not in check:
+                    raise ValueError("outputs scope requires a file/path assertion")
+                selected_root = artifact_roots[scope]
+                selected_before = (before_artifacts or {}).get(scope)
             ok, messages = _evaluate_state_check(
-                check, workspace, mock_snapshot=mock_snapshot, before_workspace=before_workspace
+                check,
+                selected_root,
+                mock_snapshot=mock_snapshot,
+                before_workspace=selected_before,
             )
         except (OSError, ValueError, TypeError) as exc:
             ok, messages = False, [f"[FAIL] {check['type']}: unavailable artifact: {exc}"]
         all_ok = all_ok and ok
+        if check.get("artifact_scope", "workspace") != "workspace":
+            messages = [
+                f"{message} [artifact_scope={check['artifact_scope']}]" for message in messages
+            ]
         details.extend(messages)
     return all_ok, details
 

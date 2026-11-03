@@ -3,6 +3,54 @@ from tests.helpers import TemporaryDirectoryTestCase
 
 
 class CheckTests(TemporaryDirectoryTestCase):
+    def test_native_outputs_require_explicit_root_and_do_not_alias_workspace(self):
+        workspace, outputs = self.root / "workspace", self.root / "outputs"
+        workspace.mkdir()
+        outputs.mkdir()
+        (workspace / "report.txt").write_text("wrong workspace copy")
+        (outputs / "report.txt").write_text("correct deliverable")
+        check = {
+            "type": "file_exact_lines",
+            "path": "report.txt",
+            "expected": ["correct deliverable"],
+            "artifact_scope": "outputs",
+        }
+        self.assertFalse(checks.evaluate_state_checks([check], workspace)[0])
+        passed, details = checks.evaluate_state_checks(
+            [check], workspace, artifact_roots={"outputs": outputs}
+        )
+        self.assertTrue(passed, details)
+        self.assertIn("artifact_scope=outputs", details[0])
+        ordinary = {k: v for k, v in check.items() if k != "artifact_scope"}
+        self.assertFalse(
+            checks.evaluate_state_checks(
+                [ordinary], workspace, artifact_roots={"outputs": outputs}
+            )[0]
+        )
+        before = {"report.txt": {"kind": "file", "text": "approved draft"}}
+        compare = {
+            "type": "mock_text_matches_file",
+            "path": "report.txt",
+            "json_path": "body",
+            "file_version": "before_turn",
+            "artifact_scope": "outputs",
+        }
+        kwargs = {
+            "artifact_roots": {"outputs": outputs},
+            "mock_snapshot": {"body": "approved draft"},
+            "before_workspace": before,
+        }
+        self.assertFalse(checks.evaluate_state_checks([compare], workspace, **kwargs)[0])
+        self.assertTrue(
+            checks.evaluate_state_checks(
+                [compare], workspace, before_artifacts={"outputs": before}, **kwargs
+            )[0]
+        )
+        check["path"] = "../workspace/report.txt"
+        self.assertFalse(
+            checks.evaluate_state_checks([check], workspace, artifact_roots={"outputs": outputs})[0]
+        )
+
     def test_settlement_contract_reports_status_identity_and_duplicate_failures(self):
         import copy
         import json

@@ -107,20 +107,43 @@ class OpenHandsRuntime:
         self.conversation._ensure_agent_ready()
 
     def on_event(self, event):
-        from openhands.sdk.event import ActionEvent, MessageEvent, ObservationEvent
+        from openhands.sdk.event import ActionEvent, AgentErrorEvent, MessageEvent, ObservationEvent
 
         value = event.model_dump(mode="json")
         self.events.append(value)
         self.channel.emit({"event": "native_event", "native": value})
         if isinstance(event, ActionEvent):
-            args = json.loads(event.tool_call.arguments)
-            self.active[event.tool_call_id] = {
+            try:
+                args = json.loads(event.tool_call.arguments)
+            except ValueError:
+                args = event.tool_call.arguments
+            call = {
                 "id": event.tool_call_id,
                 "name": event.tool_name,
                 "arguments": args,
             }
+            self.channel.emit({"event": "tool_attempt", **call})
+            if event.action is None:
+                # The SDK also emits ActionEvent for malformed/invalid calls.
+                # No executor ran; its AgentErrorEvent supplies the rejection.
+                return
+            self.active[event.tool_call_id] = call
+            self.channel.emit({"event": "tool_start", **call, "workspace": snapshot()})
+        elif isinstance(event, AgentErrorEvent):
+            started = event.tool_call_id in self.active
+            self.completed_calls.add(event.tool_call_id)
             self.channel.emit(
-                {"event": "tool_start", **self.active[event.tool_call_id], "workspace": snapshot()}
+                {
+                    "event": "tool_complete" if started else "tool_rejected",
+                    "id": event.tool_call_id,
+                    "name": event.tool_name,
+                    "result": event.error,
+                    "error": event.error,
+                    "native_result": value,
+                    "workspace": snapshot(),
+                    "observation_layer": "native_agent_error",
+                    "execution_observed": started,
+                }
             )
         elif isinstance(event, ObservationEvent):
             self.completed_calls.add(event.tool_call_id)

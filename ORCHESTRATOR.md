@@ -1,7 +1,7 @@
 # Source-grounded evaluation orchestrator
 
-The Hermes starter campaign uses `muse-spark-1.3-contributor` for the main agent
-and all three reviewer agents, and `command-a-03-2025` inside Hermes. Configure
+The improvement-phase example uses Baseten `meta-models/muse-spark-open-1026`
+for the main agent and all three reviewers, and `command-a-03-2025` in the target runtime. Configure
 exact endpoints, credential variable names, the Hermes interpreter and a pinned
 GitHub revision in `orchestrator.example.json`. Credentials resolve from shell
 variables followed by the repository-root `.env`.
@@ -32,7 +32,8 @@ variables followed by the repository-root `.env`.
    suites may add, edit or remove tests and contain at most twelve active tests.
    Every revised suite goes through review again and every active test runs again.
 9. Stop on an explicit decision that no further changes are warranted, or after
-   five target-execution rounds. The stopping reason is saved explicitly.
+   the configured target-execution limit (three by default in the improvement phase;
+   at most five). The stopping reason is saved explicitly.
 
 An incomplete/invalid evaluator execution or a failed evidence audit prevents a
 convergence claim. Completed runs can still contain weak oracles or false passes;
@@ -45,6 +46,13 @@ incomplete/invalid lane, even when the model declines convergence. This checks
 that the gap is retained; it does not certify the truth of every narrative claim.
 Native cleanup exceptions cannot be downgraded to warnings just because task
 assertions passed; the evidence audit flags that mismatch with the validity policy.
+After a native runtime error, the host cancels outstanding inference relays so a
+failed shutdown cannot leave it waiting indefinitely on a provider response. The
+native error and cancellation remain recorded; missing provider usage stays
+unknown. Normal inference payloads, output limits and read durations are unchanged.
+Atomic report replacement retries transient Windows sharing/access errors, then
+raises on persistent failure. Each unpublished checkpoint has its own temporary
+file, preventing a later error report from overwriting that pending evidence.
 
 Preflight validates authored prerequisite references. Authors may also supply a
 `reference` on the final turn, including in a one-turn task: preflight then executes
@@ -79,15 +87,24 @@ tool traces and worker logs before reviewers or the main agent revise the suite.
 Authored-reference failures are test-construction evidence, not target-model
 failures. Detailed evidence must guide reference repairs rather than weakening
 the property checks to make validation pass.
+Execution preflight also rejects authored shared prefixes that use nonportable
+tools, before paid task inference. This checks the supplied reference only;
+runtime validation still checks the actual sampled prefix and checkpoint.
 Main and reviewer agents can use the read-only `probe` workspace action to try
 valid and invalid synthetic files, service snapshots, calls and final responses
 against a selected turn's trusted built-in oracles. Baseline and treatment probes
-use their respective check contracts. Probes do not execute native tools, task
-code or candidate Python. They record the scenario/checker hashes, actual results
+use their respective check contracts. Probes do not execute native tools or candidate evaluator Python. For configured
+native runtimes, `artifact_python` and supplied task programs run in disposable
+network-disabled Docker copies; otherwise executable probes are rejected. They record the scenario/checker hashes, actual results
 and whether those results match the author's expectation. A changed/custom checker
 still needs its own regression tests in preflight. Reviewers must assess whether
 the proposed examples are semantically valid; a passing probe alone proves no
 agent capability.
+Optional `check_ids` selects particular assertions from the current validation
+catalog; the result lists selected and unselected IDs. Omitting it tests the whole
+turn. This lets an artifact counterexample isolate its intended oracle instead of
+failing because unrelated synthetic call records were omitted. A negative result
+still needs inspection of which check failed and why.
 Review roles retain their own conversations across revisions within a round.
 Later rounds can inspect indexed analyses from every earlier round. Generated
 pairs place the selected fault in treatment and remove it in baseline.
@@ -139,7 +156,10 @@ must remain an issue. The third-generation no-review execution rule is unchanged
 Source and evidence batches retain each successful read even when another query
 fails. Source errors direct the agent to the indexed upstream paths; evaluator
 workspace reads use a separate envelope. Nested source/evidence commands inside
-workspace actions are rejected instead of silently ignored. Reviewer instructions
+workspace actions are rejected instead of silently ignored. Upstream path discovery
+uses `source:[{query,offset,limit}]`; this returns
+tracked path names and pagination metadata, not inspected-source citation credit.
+Evaluator files still use workspace reads. Reviewer instructions
 require checking implementation semantics before reporting a verifier defect, and
 require keeping computed solutions out of prompts when derivation is being tested.
 Repeated reads of the same unchanged range receive an advisory after the third
@@ -168,6 +188,11 @@ copies stay unchanged. Recovery rejects changed source evidence, changed workspa
 snapshots, changed target settings and exhausted generation budgets. The one-off
 native-whitelist and Hermes turn-boundary repair modes are retired;
 reproduce those historical recoveries with their frozen implementations.
+An operator-preempted review can use the same recovery path when its stop reason
+was recorded and target execution has not begun. The new attempt receives the
+current controller's policy and variant guidance alongside the saved conversation;
+this is a recorded prompt revision, not an exact replay. The original preemption
+reason remains in recovery provenance and is not mislabeled as a provider error.
 
 Transient HTTP 408/429/500/502/503/504 and transport failures are retried up to five
 times by default (`orchestrator.transient_retries`). Each attempt retains separate
@@ -372,3 +397,75 @@ feedback. The coordinator imports these definitions. Campaign-local evaluator
 workspaces contain `src/evaluation/` and its package initializer, not the
 orchestrator. Editable Python paths are `src/evaluation/*.py` and `tests/*.py`.
 Revision hashes and source snapshots include nested evaluation modules.
+
+## Prompt improvement experiments
+
+`prompt_variant` selects `baseline`, `evidence_first_v1`, `counterexample_first_v1`,
+`architecture_first_v1`, `architecture_first_v2`, or `architecture_first_v3`. The second architecture variant
+adds examples derived from observed empty/duplicate-row false passes, comment-only
+dependency checks, and confusion between artifact mutation and agent-visible
+controlled branches. It is a proposed revision, not an established winner.
+The third adds complete ordinary-request examples and distinguishes discoverable
+requirements from computed answers and unnecessary tool prescriptions.
+All instructions and worked examples remain in
+`src/orchestrator/prompts.py`. The experimental variants share existing validity
+rules and vary the emphasis of the design process. The improvement-phase limits
+are three generations and three execution rounds, retaining five initial and
+12 active tests. Orchestrator requests have no implicit output-token limit.
+Target runtimes retain their native SDK and retry defaults, which can add limits
+to provider requests; inspect the captured wire payloads before calling a target
+run uncapped.
+
+Experimental proposals include `design_evidence`, mapping the current assertion
+IDs to visible requirements, valid alternatives and invalid examples. Reviewers
+return one free-form assessment per scenario. `src/orchestrator/quality.py` owns
+proposal, review and analysis validation: IDs, citations, coverage, required fields
+and contradictory verdicts. It does not certify
+semantic correctness. Explanations and optional `decision_notes` are unrestricted
+prose. `actions:[{"op":"validate"}]` returns current structural validation and
+`check_catalog` without inference or native execution. The same reference preflight
+and independent evidence audit still apply.
+An analysis declining convergence must propose changes or explain an unchanged
+suite in `unchanged_suite_reason`, for example to measure sampling variability.
+This detects an omitted next-step decision; it does not validate the reason.
+
+`prompt_manifest.json` records the selected variant, guidance and source hash.
+Evidence reads accept either an indexed ID or a previously returned citation
+range. A citation without explicit offset/length rereads that range; explicit
+offsets remain absolute. File-hash verification and citation provenance remain
+required. This avoids rejecting a model that reuses the reader's own reference.
+`progress.json` and `campaign.json` are updated atomically at stage boundaries.
+An operator may write `stop.json` in an attempt directory with a nonempty `reason`.
+The campaign stops before its next model request or stage, retains evidence and
+reports `operator_preempted`; an in-flight API request or native subprocess is not
+forcibly killed. This is not convergence or a target failure.
+
+For isolated code revisions, run from a frozen controller source copy and set
+`artifacts_root` in the trusted local configuration to the intended ignored output
+root. Provider secrets belong in the process environment, not that copy or config.
+Read-only measurement modules cannot be edited through workspace actions; this is
+an editor policy, not a sandbox against arbitrary candidate Python. External
+frozen auditing and source-change checks remain necessary.
+
+Different variants on different runtimes are exploratory screening, not a causal
+comparison of prompts. Evaluate contract defects, oracle counterexamples, actual
+challenge exposure, review errors, unresolved coverage and cost after each run.
+Do not select a winner by target pass rate. Transfer promising variants to other
+runtimes before attributing improvement to a generally useful prompt change.
+
+OpenHands schema-invalid actions are recorded as attempts followed by native
+rejection evidence, without inventing an executor callback. Native agent errors
+after a recorded start close that callback with the actual error. Both remain
+visible to process checks and in raw native events; rejected attempts are not
+counted as executed tools. Older traces can retain the native error while lacking
+its normalized callback mapping. Keep their original audit findings and counts.
+
+For DeerFlow, final deliverables follow the native system policy at
+`/mnt/user-data/outputs`. File assertions can explicitly select
+`"artifact_scope": "outputs"` with a relative `path`; the default remains the
+task workspace. A file in one root never satisfies a check for the other. The
+read-only oracle probe accepts `output_files` separately from workspace `files`.
+This scope supports declarative file/path checks, including comparisons with
+before-turn snapshots; `artifact_python` still uses workspace artifacts. Other
+runtime profiles reject outputs scope during validation. Existing contracts and
+historical scores retain their original workspace interpretation.

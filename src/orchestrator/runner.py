@@ -16,7 +16,7 @@ import httpx
 from src.evaluation.api_trace import SecretRedactor
 from src.evaluation.audit import audit_campaign
 from src.evaluation.evaluation_metrics import api_metrics
-from src.evaluation.runtime_support import read_jsonl, sha256_file
+from src.evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
 from src.evaluation.utils import load_eval_config
 from src.orchestrator.adapters import ROOT, make_adapter, revision_hashes
 from src.orchestrator.prompts import (
@@ -24,16 +24,25 @@ from src.orchestrator.prompts import (
     ANALYSIS_TASK,
     DESIGN_REQUIREMENTS,
     GENERATION_TASK,
-    MISSING_REGRESSION_FEEDBACK,
     POLICY,
     RECOVERY_FEEDBACK,
     REPEATED_READ_ADVISORY,
     REVIEWERS,
     SMOKE_SCOPE,
     SOURCE_READ_HINT,
+    VARIANTS,
     contract_error,
     parse_error,
     review_task,
+    variant_context,
+)
+from src.orchestrator.quality import (
+    validate_analysis,
+    validate_assessments,
+    validate_design,
+    validate_proposal,
+    validate_review,
+    validate_stopping,
 )
 from src.orchestrator.transcripts import export_execution
 from src.orchestrator.workspace import Workspace
@@ -41,6 +50,20 @@ from src.orchestrator.workspace import Workspace
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+class CampaignPreempted(Exception):
+    """Operator-requested stop at a safe boundary, never a convergence verdict."""
+
+
+def check_stop(directory):
+    path = Path(directory) / "stop.json"
+    if path.exists():
+        value = json.loads(path.read_text(encoding="utf-8"))
+        reason = value.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("stop.json requires a nonempty reason")
+        raise CampaignPreempted(reason)
 
 
 class Evidence:
@@ -58,7 +81,17 @@ class Evidence:
         return eid
 
     def read(self, query):
-        if query.get("id") not in self.items:
+        identity = query.get("id")
+        if isinstance(identity, str) and identity in self.seen:
+            eid, start, end = identity.split(":")
+            query = {
+                **query,
+                "id": eid,
+                "offset": query.get("offset", int(start)),
+                "length": query.get("length", max(1, int(end) - int(start))),
+            }
+            identity = eid
+        if not isinstance(identity, str) or identity not in self.items:
             raise ValueError(
                 "Unknown evidence ID. For workspace files use actions with op=read and path. For agent source use source with path."
             )
@@ -131,6 +164,7 @@ class Client:
                     remaining -= interval
 
     def _ask_once(self, messages):
+        check_stop(self.directory)
         if self.limit is not None and self.calls >= self.limit:
             raise RuntimeError("Orchestrator request budget exhausted")
         self.calls += 1
@@ -270,6 +304,7 @@ def exchange(
     elif len(messages) < 2:
         raise ValueError("Pending-request recovery requires its saved conversation")
     read_counts = {}
+    source_paths = None
     while True:
         try:
             answer = client.ask(messages)
@@ -307,6 +342,47 @@ def exchange(
                     raise ValueError("Invalid source request")
                 for query in answer["source"]:
                     try:
+                        if "query" in query:
+                            if "path" in query:
+                                raise ValueError(
+                                    "Use query for path discovery or path for a source read"
+                                )
+                            term = query["query"]
+                            offset, limit = query.get("offset", 0), query.get("limit", 25)
+                            if (
+                                not isinstance(term, str)
+                                or not term.strip()
+                                or type(offset) is not int
+                                or offset < 0
+                                or type(limit) is not int
+                                or limit < 1
+                            ):
+                                raise ValueError(
+                                    "Source search needs nonempty query, offset >= 0 and limit > 0"
+                                )
+                            if source_paths is None:
+                                source_paths = (
+                                    subprocess.run(
+                                        ["git", "-C", str(source), "ls-files", "-z"],
+                                        check=True,
+                                        capture_output=True,
+                                        text=True,
+                                        encoding="utf-8",
+                                    )
+                                    .stdout.rstrip("\0")
+                                    .split("\0")
+                                )
+                            matches = [p for p in source_paths if term.casefold() in p.casefold()]
+                            results.append(
+                                {
+                                    "query": query,
+                                    "paths": matches[offset : offset + limit],
+                                    "total": len(matches),
+                                    "has_more": offset + limit < len(matches),
+                                    "scope": "Tracked path names only; read source content before citing architecture.",
+                                }
+                            )
+                            continue
                         path = (source / query["path"]).resolve()
                         if (
                             not path.is_relative_to(source)
@@ -316,7 +392,14 @@ def exchange(
                             raise ValueError("Source read outside allowed repository files")
                         eid = evidence.add(path)
                         results.append({"query": query, **evidence.read({**query, "id": eid})})
-                    except (ValueError, KeyError, OSError, TypeError, AttributeError) as exc:
+                    except (
+                        ValueError,
+                        KeyError,
+                        OSError,
+                        TypeError,
+                        AttributeError,
+                        subprocess.CalledProcessError,
+                    ) as exc:
                         results.append(
                             {
                                 "query": query,
@@ -387,79 +470,6 @@ def exchange(
         )
 
 
-def validate_analysis(result, evidence, scenario_ids, *, strict_owners=False, executions=None):
-    invalid = (
-        [
-            lane
-            for lane, execution in executions.items()
-            if execution.get("status") != "complete"
-            or execution.get("evidence_audit", {}).get("passed") is False
-        ]
-        if executions is not None
-        else []
-    )
-    if result.get("converged") is True and invalid:
-        raise ValueError(
-            f"Cannot establish convergence with incomplete or invalid executions: {invalid}. "
-            "Retain the validity issue and propose its repair without counting it as a target failure."
-        )
-    rows = result["scenarios"]
-    if {r["id"] for r in rows} != set(scenario_ids) or len(rows) != len(scenario_ids):
-        raise ValueError("Analysis must cover every generated scenario exactly once")
-    for row in rows:
-        if row["property_outcome"] not in {
-            "observed_compliance",
-            "observed_violation",
-            "not_exercised",
-            "uncertain",
-        }:
-            raise ValueError("Invalid property outcome")
-        if not row["evidence_refs"] or not set(row["evidence_refs"]) <= evidence.seen:
-            raise ValueError("Uninspected or missing analysis citations")
-        for finding in row["findings"]:
-            if not finding["evidence_refs"] or not set(finding["evidence_refs"]) <= evidence.seen:
-                raise ValueError("Uninspected finding citation")
-            if finding["certainty"] not in {"observed", "inferred", "unresolved"}:
-                raise ValueError("Invalid attribution certainty")
-            owners = {
-                "model",
-                "serving_protocol",
-                "hermes_runtime",
-                "agent_runtime",
-                "mock_service",
-                "harness",
-                "verifier",
-                "infrastructure",
-                "unresolved",
-            }
-            if strict_owners and (
-                not isinstance(finding.get("contributors"), list)
-                or not finding["contributors"]
-                or not set(finding["contributors"]) <= owners
-            ):
-                raise ValueError(
-                    f"Use explicit contributor labels from {sorted(owners)}. Generic runtime is ambiguous."
-                )
-    if not isinstance(result["unresolved"], list):
-        raise ValueError("Missing unresolved evidence gaps")
-    if strict_owners and invalid:
-        retained = {
-            gap.get("lane")
-            for gap in result["unresolved"]
-            if isinstance(gap, dict)
-            and gap.get("kind") == "execution_validity"
-            and isinstance(gap.get("description"), str)
-            and gap["description"].strip()
-        }
-        missing = set(invalid) - retained
-        if missing:
-            raise ValueError(
-                f"Retain incomplete/invalid lane evidence for {sorted(missing)} in unresolved, "
-                "using {kind: execution_validity, lane: <lane>, description: <observed issue>}. "
-                "A non-convergence decision alone does not document why execution is incomplete."
-            )
-
-
 def prepare_source(config, output):
     source_config = config["source"]
     repository = source_config["repository"]
@@ -485,49 +495,6 @@ def prepare_source(config, output):
         output / "agent_source.json", {"repository": repository, "revision": actual, "files": paths}
     )
     return source
-
-
-def validate_review(review, role, cases, oracle_validation=None):
-    if type(review.get("accepted")) is not bool or not isinstance(review.get("issues"), list):
-        raise ValueError("Reviewer must return accepted boolean and issues list")
-    ids = {s["id"] for s in cases}
-    seen = set()
-    for issue in review["issues"]:
-        if (
-            not isinstance(issue, dict)
-            or not issue.get("description")
-            or not issue.get("id", "").startswith(role + "-")
-        ):
-            raise ValueError("Review issues need stable role-prefixed IDs and descriptions")
-        if issue["id"] in seen or not set(issue.get("scenario_ids", [])) <= ids:
-            raise ValueError("Duplicate issue ID or unknown scenario")
-        seen.add(issue["id"])
-    if review["accepted"] and review["issues"]:
-        raise ValueError("An accepting reviewer must resolve its issues")
-    if (
-        role == "verification_attribution"
-        and review["accepted"]
-        and oracle_validation
-        and oracle_validation["checker_code_changed"]
-        and not oracle_validation["passing_regression_execution_observed"]
-    ):
-        raise ValueError(MISSING_REGRESSION_FEEDBACK)
-
-
-def validate_proposal(plan, evidence, source):
-    if plan.get("ready") is not True or not isinstance(plan.get("rationale"), list):
-        raise ValueError("Return ready=true and a rationale list when editing is complete")
-    source_refs = {
-        ref
-        for ref in evidence.seen
-        if Path(evidence.items[ref.split(":")[0]]["path"]).is_relative_to(source)
-    }
-    for row in plan["rationale"]:
-        refs = row.get("architecture_refs", [])
-        if not refs or not set(refs) <= evidence.seen or not set(refs).intersection(source_refs):
-            raise ValueError(
-                f"Use exact inspected source refs. Available refs: {sorted(source_refs)}"
-            )
 
 
 def api_usage(directory):
@@ -675,7 +642,9 @@ def initial_recovery(config, evidence):
     if not config.get("resume_initial_from"):
         return None
     prior = Path(config["resume_initial_from"]).resolve()
-    if not prior.is_relative_to((ROOT / "eval_harness/orchestrator").resolve()):
+    if not prior.is_relative_to(
+        Path(config.get("artifacts_root", ROOT / "eval_harness/orchestrator")).resolve()
+    ):
         raise ValueError("Recovery must name a local orchestrator campaign")
     state = json.loads((prior / "campaign.json").read_text(encoding="utf-8"))
     rounds = state.get("rounds", [])
@@ -738,7 +707,9 @@ def review_recovery(config, evidence):
     if not config.get("resume_from"):
         return None
     prior = Path(config["resume_from"]).resolve()
-    if not prior.is_relative_to((ROOT / "eval_harness/orchestrator").resolve()):
+    if not prior.is_relative_to(
+        Path(config.get("artifacts_root", ROOT / "eval_harness/orchestrator")).resolve()
+    ):
         raise ValueError("Recovery must name a local orchestrator campaign")
     state = json.loads((prior / "campaign.json").read_text(encoding="utf-8"))
     previous = json.loads((prior / "config.json").read_text(encoding="utf-8-sig"))
@@ -748,8 +719,14 @@ def review_recovery(config, evidence):
     for field in ("model", "base_url", "api_key_env"):
         if previous["orchestrator"].get(field) != config["orchestrator"].get(field):
             raise ValueError(f"Recovery cannot change orchestrator {field}")
-    if state.get("stop_reason") != "error" or not state.get("rounds"):
-        raise ValueError("Review recovery requires a failed campaign")
+    prior_stop = state.get("stop_reason")
+    operator_reason = state.get("preemption_reason")
+    if prior_stop not in {"error", "operator_preempted"} or not state.get("rounds"):
+        raise ValueError("Review recovery requires a failed or operator-preempted campaign")
+    if prior_stop == "operator_preempted" and (
+        not isinstance(operator_reason, str) or not operator_reason.strip()
+    ):
+        raise ValueError("Operator recovery requires the recorded preemption reason")
     record = state["rounds"][-1]
     if record.get("executions"):
         raise ValueError("Review recovery cannot resume an execution or analysis failure")
@@ -809,6 +786,7 @@ def review_recovery(config, evidence):
                 source_id = task["source_index"]
     if main_messages is None:
         raise ValueError("Missing saved main-agent conversation")
+    main_messages[0] = {"role": "system", "content": POLICY}
     main_messages.append({"role": "assistant", "content": canonical(plan)})
     if not any(g["generation"] == generation for g in record["generations"]):
         record["generations"].append(
@@ -821,8 +799,12 @@ def review_recovery(config, evidence):
             }
         )
     state.pop("error", None)
+    state.pop("preemption_reason", None)
+    state["stop_reason"] = "error"
     return {
         "prior": prior,
+        "prior_stop_reason": prior_stop,
+        "prior_preemption_reason": operator_reason,
         "state": state,
         "round": record["round"],
         "generation": generation + 1,
@@ -832,7 +814,15 @@ def review_recovery(config, evidence):
         + [
             {
                 "role": "recovery",
-                "description": RECOVERY_FEEDBACK,
+                "description": (
+                    "An operator stopped the review to revise the test design: "
+                    + operator_reason
+                    + " The interrupted generation counts toward the original limit. "
+                    "Revise the saved suite using available reviewer findings and this feedback. "
+                    "This was not a provider failure; no target executions are replayed."
+                    if prior_stop == "operator_preempted"
+                    else RECOVERY_FEEDBACK
+                ),
             }
         ],
     }
@@ -844,18 +834,22 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
             "One-off historical evaluator repairs are retired. "
             "Use the original frozen implementation to reproduce those campaigns."
         )
+    variant = config.get("prompt_variant", "baseline")
+    if variant not in VARIANTS:
+        raise ValueError(f"Unknown prompt_variant: {variant}")
+    artifact_root = Path(config.get("artifacts_root", ROOT / "eval_harness/orchestrator")).resolve()
     attempt = uuid.uuid4().hex
     prior = config.get("resume_from") or config.get("resume_initial_from")
     if prior and Path(prior).parent.name == "attempts":
         experiment = Path(prior).resolve().parents[1]
-        if not experiment.is_relative_to((ROOT / "eval_harness/orchestrator").resolve()):
+        if not experiment.is_relative_to(artifact_root):
             raise ValueError("Recovery must name a local orchestrator experiment")
     else:
         kind = config.get("adapter", {}).get("kind", "hermes")
         if kind not in {"hermes", "openhands", "deerflow"}:
             raise ValueError("Unknown agent runtime")
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        experiment = ROOT / "eval_harness/orchestrator" / f"{kind}_{stamp}_{attempt[:8]}"
+        experiment = artifact_root / f"{kind}_{stamp}_{attempt[:8]}"
     output = experiment / "attempts" / attempt
     output.mkdir(parents=True)
     values = load_eval_config(ROOT / ".env")
@@ -864,11 +858,35 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
     redactor = SecretRedactor([orch_key, target_key])
     save(output / "config.json", redactor(config))
     evidence = Evidence(redactor)
-    state = {"rounds": [], "stop_reason": "error", "scope": config["scope"]}
+    state = {
+        "rounds": [],
+        "stop_reason": "error",
+        "scope": config["scope"],
+        "prompt_variant": variant,
+    }
+    save(
+        output / "prompt_manifest.json",
+        {
+            "variant": variant,
+            "prompt_source_sha256": sha256_file(Path(__file__).with_name("prompts.py")),
+            "guidance": {
+                role: variant_context(variant, role) for role in ("main", *REVIEWERS, "analysis")
+            },
+        },
+    )
+
+    def progress(phase, **details):
+        check_stop(output)
+        write_json_atomic(
+            output / "progress.json",
+            {"phase": phase, "updated_at": datetime.now(UTC).isoformat(), **details},
+        )
+        write_json_atomic(output / "campaign.json", redactor(state))
+
     print(output, flush=True)
     try:
         limits = {
-            "rounds": 5,
+            "rounds": 3,
             "initial_tests": 5,
             "active_tests": 12,
             "generations": 3,
@@ -903,6 +921,9 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 "method": "next_generation_after_interrupted_review",
                 "round": resumed["round"],
                 "generation": resumed["generation"],
+                "prior_stop_reason": resumed["prior_stop_reason"],
+                "prior_preemption_reason": resumed["prior_preemption_reason"],
+                "prompt_policy": "Current controller policy and variant guidance; prior conversation retained as evidence, not an exact request replay.",
             }
             save(output / "recovery.json", state["recovery"])
         else:
@@ -938,6 +959,12 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
             save(output / "native_tool_catalog.json", catalog)
             catalog_id = evidence.add(output / "native_tool_catalog.json")
             catalog_evidence = {"id": catalog_id, **evidence.items[catalog_id]}
+            if catalog.get("available") and catalog.get("physical_workspace"):
+                workspace.artifact_runtime = {
+                    "image": catalog["runtime_image"],
+                    "workspace": catalog["physical_workspace"],
+                    "visible_workspace": catalog["workspace"],
+                }
         client = client_factory(
             config["orchestrator"], output, redactor, orch_key, limits.get("requests")
         )
@@ -964,10 +991,12 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
             if recovery and index == 1:
                 conversations["main"] = recovery["messages"]
             limit = limits["initial_tests"] if index == 1 else limits["active_tests"]
+            workspace.active_limit = limit
             for generation in range(
                 resumed["generation"] if continuing else 1, limits["generations"] + 1
             ):
                 print(f"Round {index}, generation {generation}", flush=True)
+                progress("generation", round=index, generation=generation)
                 stage = directory / f"generation_{generation:02d}"
                 stage.mkdir()
                 plan = exchange(
@@ -975,6 +1004,12 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                     evidence,
                     {
                         "task": GENERATION_TASK,
+                        **(
+                            variant_context(variant, "main")
+                            if not conversations["main"]
+                            or (continuing and generation == resumed["generation"])
+                            else {}
+                        ),
                         "scope": config["scope"],
                         "requirements": DESIGN_REQUIREMENTS,
                         "round": index,
@@ -1007,10 +1042,16 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                     journal=stage / "actions.jsonl",
                     conversation=conversations["main"],
                     continue_pending=bool(recovery and index == 1 and generation == 1),
-                    response_validator=lambda value: validate_proposal(value, evidence, source),
+                    response_validator=lambda value: (
+                        validate_proposal(value, evidence, source),
+                        validate_design(value, workspace.validate(limit))
+                        if variant != "baseline"
+                        else None,
+                    ),
                 )
                 save(stage / "proposal.json", plan)
                 validation = {"passed": False}
+                progress("preflight", round=index, generation=generation)
                 cases = []
                 review_inputs = workspace.review_scenarios()
                 try:
@@ -1037,6 +1078,7 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 reviews = {}
                 if generation < limits["generations"]:
                     for role, responsibility in REVIEWERS.items():
+                        progress("review", round=index, generation=generation, role=role)
                         print(
                             f"Round {index}, generation {generation}, reviewer {role}", flush=True
                         )
@@ -1045,6 +1087,11 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                             evidence,
                             {
                                 "task": review_task(role, responsibility),
+                                **(
+                                    variant_context(variant, role)
+                                    if not conversations[role]
+                                    else {}
+                                ),
                                 "requirements": DESIGN_REQUIREMENTS,
                                 "scope": config["scope"],
                                 "max_active_tests": limit,
@@ -1073,14 +1120,19 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                             source=source,
                             journal=stage / f"{role}_reads.jsonl",
                             conversation=conversations[role],
-                            response_validator=lambda value, role=role: validate_review(
-                                value,
-                                role,
-                                [
-                                    {"id": p.stem}
-                                    for p in (workspace.root / "scenarios").glob("*.json")
-                                ],
-                                oracle_validation=oracle_validation,
+                            response_validator=lambda value, role=role: (
+                                validate_review(
+                                    value,
+                                    role,
+                                    [
+                                        {"id": p.stem}
+                                        for p in (workspace.root / "scenarios").glob("*.json")
+                                    ],
+                                    oracle_validation=oracle_validation,
+                                ),
+                                validate_assessments(value, review_inputs["scenarios"])
+                                if variant != "baseline"
+                                else None,
                             ),
                         )
                         save(stage / f"review_{role}.json", review)
@@ -1132,6 +1184,7 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 break
             # Both lanes receive byte-identical scenario files and separate evaluator copies.
             for lane, evaluator in (("candidate", candidate), ("trusted", trusted.root)):
+                progress("execution", round=index, lane=lane)
                 print(
                     f"Round {index}, executing {len(cases)} tests with {lane} evaluator", flush=True
                 )
@@ -1190,11 +1243,13 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                     0, len(Path(evidence.items[eid]["path"]).read_text(encoding="utf-8")), 40000
                 )
             ]
+            progress("analysis", round=index)
             analysis = exchange(
                 client,
                 evidence,
                 {
                     "task": ANALYSIS_TASK,
+                    **variant_context(variant, "analysis"),
                     "analysis_requirements": ANALYSIS_REQUIREMENTS,
                     "scenarios": cases,
                     "scope": config["scope"],
@@ -1216,20 +1271,16 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 readonly=True,
                 source=source,
                 journal=directory / "analysis_reads.jsonl",
-                response_validator=lambda value: validate_analysis(
-                    value,
-                    evidence,
-                    record["active_ids"],
-                    strict_owners=True,
-                    executions=record["executions"],
+                response_validator=lambda value: (
+                    validate_analysis(
+                        value,
+                        evidence,
+                        record["active_ids"],
+                        strict_owners=True,
+                        executions=record["executions"],
+                    ),
+                    validate_stopping(value) if variant != "baseline" else None,
                 ),
-            )
-            validate_analysis(
-                analysis,
-                evidence,
-                record["active_ids"],
-                strict_owners=True,
-                executions=record["executions"],
             )
             current = set(transcript_ids + raw_ids)
             if any(
@@ -1253,10 +1304,20 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 break
         else:
             state["stop_reason"] = "execution_round_limit"
+    except CampaignPreempted as exc:
+        state.update(stop_reason="operator_preempted", preemption_reason=str(exc))
     except BaseException as exc:
         state["error"] = redactor(f"{type(exc).__name__}: {exc}")
         raise
     finally:
+        write_json_atomic(
+            output / "progress.json",
+            {
+                "phase": "terminal",
+                "stop_reason": state["stop_reason"],
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
         save(
             output / "orchestrator_usage.json",
             {
@@ -1266,7 +1327,7 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
             },
         )
         save(output / "evidence_index.json", evidence.items)
-        save(output / "campaign.json", redactor(state))
+        write_json_atomic(output / "campaign.json", redactor(state))
     return output
 
 

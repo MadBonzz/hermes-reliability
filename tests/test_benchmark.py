@@ -29,6 +29,23 @@ def spec(number):
 
 
 class BranchTests(TemporaryDirectoryTestCase):
+    def test_preflight_rejects_nonportable_authored_reference_before_paid_prefix(self):
+        scenario = spec(41)
+        scenario["turns"][0]["reference"] = {
+            "actions": [
+                {"tool": "write_file", "arguments": {"path": "notes.txt", "content": "data"}}
+            ],
+            "final_response": "Created notes.",
+        }
+        suite = {"suite_name": "test", "scenarios": [scenario]}
+        # An explicitly extended authoring adapter may still propose support.
+        validate_benchmark(suite, ROOT / "scenario.schema.json", require_portable_prefix=False)
+        with self.assertRaisesRegex(ValueError, "shared-prefix reference uses nonportable tool"):
+            validate_benchmark(suite, ROOT / "scenario.schema.json")
+        # Starting both conditions from an empty prefix needs no native file clone.
+        scenario["experiment"]["branch_turn"] = 1
+        validate_benchmark(suite, ROOT / "scenario.schema.json")
+
     def test_api_usage_is_independent_of_content_shape_and_rejects_invalid_counts(self):
         request = {"event": "api_request", "request_id": "a", "body": {"model": "model"}}
         body = {
@@ -65,6 +82,7 @@ class BranchTests(TemporaryDirectoryTestCase):
 
     def test_native_reference_names_follow_selected_runtime(self):
         original = spec(41)
+        original["experiment"]["branch_turn"] = 1
         for kind, tool, wrong in (
             ("openhands", "file_editor", "read_file"),
             ("deerflow", "bash", "terminal"),

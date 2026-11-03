@@ -21,6 +21,21 @@ def condition_spec(spec, condition):
     return result
 
 
+def _portable_tools(spec, runtime_kind):
+    allowed = {
+        tool["name"]
+        for tool in spec.get("mock_tools", [])
+        if tool["behavior"]["type"] == "stateful_service"
+    }
+    if runtime_kind == "deerflow":
+        allowed.add("write_todos")
+    elif runtime_kind == "openhands":
+        allowed.add("finish")
+    elif runtime_kind != "hermes":
+        raise ValueError("Unsupported native prefix checkpoint")
+    return allowed
+
+
 def validate_benchmark(suite, schema, *, require_portable_prefix=True, runtime_kind="hermes"):
     validate_suite(suite, schema, runtime_kind=runtime_kind)
     for spec in suite["scenarios"]:
@@ -61,25 +76,24 @@ def validate_benchmark(suite, schema, *, require_portable_prefix=True, runtime_k
                 raise ValueError("Shared service prefixes must not mutate files or context")
             if "{WORKSPACE}" in turn["prompt"]:
                 raise ValueError("Shared service prefixes must be independent of workspace paths")
+            for action in turn.get("reference", {}).get("actions", []):
+                if action["tool"] not in _portable_tools(spec, runtime_kind):
+                    raise ValueError(
+                        f"{spec['id']}: shared-prefix reference uses nonportable tool "
+                        f"{action['tool']}. Branch from turn 1 or implement native checkpoint support."
+                    )
 
 
 def validate_prefix(report, spec, *, runtime_kind="hermes"):
     """Accept portable service-only prefixes, reject uncheckpointed runtime state."""
     if report["status"] != "prefix_ready":
         raise ValueError("The shared prefix did not pass its prerequisite checks")
-    allowed = {
-        t["name"] for t in spec.get("mock_tools", []) if t["behavior"]["type"] == "stateful_service"
-    }
+    allowed = _portable_tools(spec, runtime_kind)
     native_directories = {"."}
     if runtime_kind == "deerflow":
         # These directories are initialized by LocalSandboxProvider. Todo state
         # lives in the serialized graph checkpoint, not an untracked executor.
         native_directories |= {"workspace", "uploads", "outputs"}
-        allowed.add("write_todos")
-    elif runtime_kind == "openhands":
-        allowed.add("finish")
-    elif runtime_kind != "hermes":
-        raise ValueError("Unsupported native prefix checkpoint")
     if runtime_kind != "hermes":
         continuation = report.get("continuation", {})
         native = continuation.get("native_state", {})

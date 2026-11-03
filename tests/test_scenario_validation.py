@@ -17,6 +17,23 @@ from tests.helpers import TemporaryDirectoryTestCase, mock, scenario
 
 
 class ScenarioFileTests(TemporaryDirectoryTestCase):
+    def test_output_scope_is_explicit_and_native_profile_specific(self):
+        spec = scenario()
+        check = {"type": "file_exists", "path": "report.json", "artifact_scope": "outputs"}
+        spec["turns"][0]["state_checks"] = [check]
+        suite = {"suite_name": "test", "scenarios": [spec]}
+        validate_suite(suite, self.schema, runtime_kind="deerflow")
+        for kind in ("hermes", "openhands"):
+            with self.assertRaisesRegex(ValueError, "outputs scope"):
+                validate_suite(suite, self.schema, runtime_kind=kind)
+        check["path"] = "../workspace/report.json"
+        with self.assertRaisesRegex(ValueError, "relative path"):
+            validate_suite(suite, self.schema, runtime_kind="deerflow")
+        check.clear()
+        check.update(type="mock_effects_equal", expected=[], artifact_scope="outputs")
+        with self.assertRaisesRegex(ValueError, "file/path assertion"):
+            validate_suite(suite, self.schema, runtime_kind="deerflow")
+
     def test_external_schema_references_are_detected_without_resolution(self):
         self.assertFalse(external_schema_ref({"items": [{"$ref": "#/definitions/local"}]}))
         for reference in ("other.json", "file:///private.json", "https://example.invalid/schema"):

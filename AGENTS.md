@@ -126,6 +126,13 @@ Select the native reference-tool profile throughout schema loading, authoring an
 preflight; the default remains Hermes for historical callers. DeerFlow task files
 belong under `/mnt/user-data/workspace`, not the virtual parent. Retain auxiliary
 uploads/output snapshots and reject file-bearing shared prefixes there too.
+DeerFlow's native system policy places final deliverables under
+`/mnt/user-data/outputs`. Declare `artifact_scope: "outputs"` on file/path
+assertions for those deliverables; paths remain relative to that root. The
+default scope is workspace, with no cross-root fallback. Outputs scope is
+DeerFlow-only and does not apply to `artifact_python`. Its before-turn comparisons
+use the outputs snapshot. Orchestrator probes supply `output_files` separately
+from workspace `files`. Keep historical contracts and scores unchanged.
 
 The lightweight harness environment supports validation and regression tests with
 Python 3.11+. Hermes evaluation must run in a Python environment with Hermes's

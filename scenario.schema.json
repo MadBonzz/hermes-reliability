@@ -555,6 +555,11 @@
                   },
                   "uniqueItems": true
                 },
+                "artifact_scope": {
+                  "enum": ["workspace", "outputs"],
+                  "default": "workspace",
+                  "description": "File assertion root. outputs selects DeerFlow's native final-deliverable directory; paths remain relative to that root."
+                },
                 "file_json_path": {
                   "type": "string"
                 },

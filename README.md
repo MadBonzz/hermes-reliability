@@ -221,6 +221,11 @@ requirements have different responsibilities.
 
 ## Scenarios and verification
 
+DeerFlow final deliverables use its native outputs directory. Select
+`artifact_scope: "outputs"` on file assertions for those artifacts; ordinary
+checks continue to use the task workspace. See [artifact scopes](ORCHESTRATOR.md)
+for supported checks and read-only oracle probes.
+
 Edit the standalone JSON files directly using
 [scenario.schema.json](scenario.schema.json). Each task defines its request,
 mock interfaces, turn perturbations and state/process/output checks.
@@ -250,7 +255,7 @@ Hermes, OpenHands or DeerFlow GitHub checkout. Three reviewer agents assess the
 suite, and the main agent edits campaign-local scenarios and evaluator code. Each execution round compares
 the edited evaluator with a frozen copy of this repository's evaluator, then feeds
 cleaned transcripts back to the main agent. The starter begins with up to five
-tests, permits twelve active tests and stops after at most five execution rounds.
+tests, permits twelve active tests and defaults to three execution rounds.
 
 Copy [orchestrator.example.json](orchestrator.example.json) to an ignored local
 location. Configure exact orchestrator and target models, credential environment

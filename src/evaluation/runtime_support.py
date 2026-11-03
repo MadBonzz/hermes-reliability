@@ -4,6 +4,8 @@ import copy
 import hashlib
 import json
 import threading
+import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,11 +29,21 @@ def json_safe(value):
 def write_json_atomic(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
     temporary.write_text(
         json.dumps(json_safe(value), indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    temporary.replace(path)
+    # Windows scanners/readers can briefly deny rename of an existing checkpoint.
+    # Retry only the atomic replacement; never fall back to truncating the report.
+    # Persistent denial remains a logging failure, with the pending data retained.
+    for attempt in range(5):
+        try:
+            temporary.replace(path)
+            break
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in (5, 32, 33) or attempt == 4:
+                raise
+            time.sleep(0.05 * 2**attempt)
 
 
 def sha256_file(path):
