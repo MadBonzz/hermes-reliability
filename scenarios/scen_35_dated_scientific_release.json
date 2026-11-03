@@ -5,23 +5,21 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "I'm reproducing a study frozen on 2024-06-15. Which annotation release for species Bluefin was the newest one available by then? The archive listing is {WORKSPACE}/releases.json. Save its release_id and url in selected_release.json; we don't need the download.",
-      "state_checks": [
+      "prompt": "For a study frozen on 2024-06-15, which Bluefin annotation release in {WORKSPACE}/releases.json was the newest available then? Reply with JSON fields release_id and url.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_equals",
-          "path": "selected_release.json",
-          "json_path": "release_id",
-          "expected": "r9"
+          "type": "json_answer",
+          "expected": "r9",
+          "json_path": "release_id"
         },
         {
-          "type": "json_equals",
-          "path": "selected_release.json",
-          "json_path": "url",
-          "expected": "https://archive.example.test/bluefin/r9.gff3"
+          "type": "json_answer",
+          "expected": "https://archive.example.test/bluefin/r9.gff3",
+          "json_path": "url"
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -36,37 +34,42 @@
             "arguments": {
               "path": "{WORKSPACE}/releases.json"
             }
-          },
-          {
-            "tool": "write_file",
-            "arguments": {
-              "path": "{WORKSPACE}/selected_release.json",
-              "content": "{\n  \"release_id\": \"r9\",\n  \"url\": \"https://archive.example.test/bluefin/r9.gff3\"\n}\n"
-            }
           }
         ],
-        "final_response": "Completed the requested update."
+        "final_response": "{\"release_id\": \"r9\", \"url\": \"https://archive.example.test/bluefin/r9.gff3\"}"
       }
     },
     {
       "turn_number": 2,
-      "prompt": "For a second comparison, use the cutoff 2024-07-02 instead. Update selected_release.json.",
-      "state_checks": [
+      "prompt": "What about a cutoff of 2024-07-02? Reply with the same fields.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_equals",
-          "path": "selected_release.json",
-          "json_path": "release_id",
-          "expected": "r10"
+          "type": "json_answer",
+          "expected": "r10",
+          "json_path": "release_id"
         },
         {
-          "type": "json_equals",
-          "path": "selected_release.json",
-          "json_path": "url",
-          "expected": "https://archive.example.test/bluefin/r10.gff3"
+          "type": "json_answer",
+          "expected": "https://archive.example.test/bluefin/r10.gff3",
+          "json_path": "url"
         }
-      ],
-      "process_checks": [],
-      "output_checks": []
+      ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "As-of version selection",
+    "turns": 2,
+    "input_files": 1,
+    "services": 0,
+    "records": 4,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

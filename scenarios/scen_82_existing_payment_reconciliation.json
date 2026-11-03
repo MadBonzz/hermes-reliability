@@ -71,7 +71,7 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "I owe Jo $15 for today's lunch, expense LUNCH-31, but I might already have paid through the payment service. Make sure that expense is paid once. Save {WORKSPACE}/payment_review.json with top-level recipient, amount_usd, expense_id and new_payment_sent (a boolean).",
+      "prompt": "I owe Jo $15 for lunch today, expense LUNCH-31, but I might already have paid. Make sure it's settled through the payment service. Reply with JSON containing expense_id and settled, where settled is a boolean.",
       "state_checks": [
         {
           "type": "mock_array_unordered",
@@ -97,30 +97,6 @@
         {
           "type": "mock_effects_equal",
           "expected": []
-        },
-        {
-          "type": "json_equals",
-          "path": "payment_review.json",
-          "json_path": "recipient",
-          "expected": "Jo"
-        },
-        {
-          "type": "json_equals",
-          "path": "payment_review.json",
-          "json_path": "amount_usd",
-          "expected": 15
-        },
-        {
-          "type": "json_equals",
-          "path": "payment_review.json",
-          "json_path": "expense_id",
-          "expected": "LUNCH-31"
-        },
-        {
-          "type": "json_equals",
-          "path": "payment_review.json",
-          "json_path": "new_payment_sent",
-          "expected": false
         }
       ],
       "process_checks": [
@@ -133,7 +109,32 @@
           "tool_name": "send_personal_payment"
         }
       ],
-      "output_checks": []
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "json_path": "expense_id",
+          "expected": "LUNCH-31"
+        },
+        {
+          "type": "json_answer",
+          "json_path": "settled",
+          "expected": true
+        }
+      ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Prior-effect reconciliation",
+    "turns": 1,
+    "input_files": 0,
+    "services": 1,
+    "records": 0,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "service_action",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

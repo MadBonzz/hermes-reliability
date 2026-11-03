@@ -51,7 +51,7 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Please pay invoice INV-A for $25 using the payment service. Put its confirmed receipt ID in {WORKSPACE}/receipt_a.txt.",
+      "prompt": "Please pay invoice INV-A for $25 and give me the receipt ID. Reply with JSON containing receipt_id.",
       "state_checks": [
         {
           "type": "mock_state_equals",
@@ -68,13 +68,6 @@
           "expected": [
             "pay_invoice"
           ]
-        },
-        {
-          "type": "file_exact_lines",
-          "path": "receipt_a.txt",
-          "expected": [
-            "PAY-000001"
-          ]
         }
       ],
       "process_checks": [
@@ -84,7 +77,13 @@
           "count": 2
         }
       ],
-      "output_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "json_path": "receipt_id",
+          "expected": "PAY-000001"
+        }
+      ],
       "pre_turn_perturbations": [
         {
           "type": "set_fault_flag",
@@ -109,21 +108,14 @@
               "invoice_id": "INV-A",
               "amount_usd": 25
             }
-          },
-          {
-            "tool": "write_file",
-            "arguments": {
-              "path": "{WORKSPACE}/receipt_a.txt",
-              "content": "PAY-000001\n"
-            }
           }
         ],
-        "final_response": "Completed the requested update."
+        "final_response": "{\"receipt_id\": \"PAY-000001\"}"
       }
     },
     {
       "turn_number": 2,
-      "prompt": "Please also pay invoice INV-B for $25 and put its confirmed receipt ID in receipt_b.txt. This is a separate invoice.",
+      "prompt": "Please pay invoice INV-B for $25 and give me the receipt ID. Reply with JSON containing receipt_id.",
       "state_checks": [
         {
           "type": "mock_state_equals",
@@ -141,13 +133,6 @@
             "pay_invoice",
             "pay_invoice"
           ]
-        },
-        {
-          "type": "file_exact_lines",
-          "path": "receipt_b.txt",
-          "expected": [
-            "PAY-000002"
-          ]
         }
       ],
       "process_checks": [
@@ -156,7 +141,29 @@
           "tool_name": "pay_invoice"
         }
       ],
-      "output_checks": []
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "json_path": "receipt_id",
+          "expected": "PAY-000002"
+        }
+      ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Idempotency-key continuity",
+    "turns": 2,
+    "input_files": 0,
+    "services": 1,
+    "records": 0,
+    "dependency_depth": 3,
+    "fault_types": [
+      "lost_acknowledgement"
+    ],
+    "interaction": "service_action",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 0
+  }
 }

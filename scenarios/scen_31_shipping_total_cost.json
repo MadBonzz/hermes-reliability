@@ -5,23 +5,21 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Which carrier is cheapest for my parcel if it must arrive within five business days? The saved quotes in {WORKSPACE}/quotes.json include mandatory surcharges separately. Please put carrier and total_usd in shipping_choice.json.",
-      "state_checks": [
+      "prompt": "Which quote in {WORKSPACE}/quotes.json is cheapest for delivery within five business days, including all mandatory surcharges? Reply with JSON fields carrier and total_usd.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_equals",
-          "path": "shipping_choice.json",
-          "json_path": "carrier",
-          "expected": "Beacon"
+          "type": "json_answer",
+          "expected": "Beacon",
+          "json_path": "carrier"
         },
         {
-          "type": "json_equals",
-          "path": "shipping_choice.json",
-          "json_path": "total_usd",
-          "expected": 29
+          "type": "json_answer",
+          "expected": 29,
+          "json_path": "total_usd"
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -30,5 +28,19 @@
         }
       ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Comparable total cost",
+    "turns": 1,
+    "input_files": 1,
+    "services": 0,
+    "records": 3,
+    "dependency_depth": 3,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from src.checks import evaluate_state_checks
+from src.evaluation.checks import evaluate_output_checks, evaluate_state_checks
 from tests.helpers import RegistryTestCase
 
 
@@ -49,7 +49,7 @@ class ScenarioContractTests(RegistryTestCase):
 
     def test_queue_requires_real_result_id_and_preserves_requested_report(self):
         manager = self.services(52)
-        full = self.call("enqueue_export", job_id="E9", report="April")
+        full = self.call("enqueue_export", job_id="E9", report="APR-2026")
         self.assertEqual("QUEUE_FULL", full["code"])
         self.assertEqual(
             "UNKNOWN_COMPLETED_RESULT",
@@ -57,9 +57,14 @@ class ScenarioContractTests(RegistryTestCase):
         )
         self.assertEqual([], manager.services.snapshot()["effects"])
         self.call("acknowledge_completed_exports", result_id=full["completed_result_ids"][0])
-        accepted = self.call("enqueue_export", job_id="E9", report="April")
+        accepted = self.call("enqueue_export", job_id="E9", report="APR-2026")
         self.assertEqual({"status": "accepted", "job_id": "E9"}, accepted)
-        (self.root / "queued_job.txt").write_text(accepted["job_id"])
+        self.assertTrue(
+            evaluate_output_checks(
+                self.scenario(52)["turns"][0]["output_checks"],
+                json.dumps({"accepted_job_id": accepted["job_id"]}),
+            )[0]
+        )
         self.assertTrue(
             evaluate_state_checks(
                 self.scenario(52)["turns"][0]["state_checks"],
@@ -106,19 +111,23 @@ class ScenarioContractTests(RegistryTestCase):
         ]
         # Use independent valid records for the authored contracts; wrong/missing
         # required data must still fail even when extra context is allowed.
-        for number, filename, report in cases:
-            checks = [
-                c
-                for c in self.scenario(number)["turns"][0]["state_checks"]
-                if c.get("path") == filename
-            ]
+        for number, _, report in cases:
+            checks = self.scenario(number)["turns"][0]["output_checks"]
             self.assertTrue(checks)
             for field in report:
                 with self.subTest(number=number, field=field):
-                    path = self.root / filename
-                    path.write_text(json.dumps({**report, "source_note": "supporting context"}))
-                    self.assertTrue(evaluate_state_checks(checks, self.root)[0])
-                    path.write_text(json.dumps({**report, field: "incorrect"}))
-                    self.assertFalse(evaluate_state_checks(checks, self.root)[0])
-                    path.write_text(json.dumps({k: v for k, v in report.items() if k != field}))
-                    self.assertFalse(evaluate_state_checks(checks, self.root)[0])
+                    self.assertTrue(
+                        evaluate_output_checks(
+                            checks, json.dumps({**report, "source_note": "supporting context"})
+                        )[0]
+                    )
+                    self.assertFalse(
+                        evaluate_output_checks(checks, json.dumps({**report, field: "incorrect"}))[
+                            0
+                        ]
+                    )
+                    self.assertFalse(
+                        evaluate_output_checks(
+                            checks, json.dumps({k: v for k, v in report.items() if k != field})
+                        )[0]
+                    )

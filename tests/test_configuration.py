@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from src import eval_runner as runner
+from src.evaluation import evaluate as runner
+from src.evaluation import utils
 from tests.helpers import TemporaryDirectoryTestCase
 
 
@@ -15,7 +16,7 @@ class ConfigurationTests(TemporaryDirectoryTestCase):
         )
         with (
             patch.dict(os.environ, {"EVAL_MODEL": "shell-model", "TOKEN": "expanded"}, clear=True),
-            patch.object(runner, "PROJECT_ROOT", self.root),
+            patch.object(runner, "ROOT", self.root),
         ):
             before = dict(os.environ)
             _, args = runner.parse_args([])
@@ -44,15 +45,14 @@ class ConfigurationTests(TemporaryDirectoryTestCase):
     def test_absent_dotenv_uses_defaults_without_loading_hermes(self):
         with (
             patch.dict(os.environ, {}, clear=True),
-            patch.object(runner, "PROJECT_ROOT", self.root),
-            patch.object(runner, "load_hermes") as load,
+            patch.object(runner, "ROOT", self.root),
+            patch.object(utils, "load_hermes") as load,
         ):
             _, args = runner.parse_args([])
             self.assertEqual("nvidia/nemotron-3-nano-4b", args.model)
             self.assertEqual("http://localhost:1235/v1", args.base_url)
             self.assertIsNone(args.hermes_root)
-            self.assertFalse(args.keep_workspace)
-            self.assertTrue(runner.parse_args(["--keep-workspace"])[1].keep_workspace)
+            self.assertEqual(1, args.repetitions)
             load.assert_not_called()
 
     def test_dotenv_is_anchored_to_repository_not_working_directory(self):
@@ -65,7 +65,7 @@ class ConfigurationTests(TemporaryDirectoryTestCase):
             os.chdir(other)
             with (
                 patch.dict(os.environ, {}, clear=True),
-                patch.object(runner, "PROJECT_ROOT", self.root),
+                patch.object(runner, "ROOT", self.root),
             ):
                 self.assertEqual("repo-model", runner.parse_args([])[1].model)
         finally:
@@ -78,7 +78,7 @@ class ConfigurationTests(TemporaryDirectoryTestCase):
         )
         with (
             patch.dict(os.environ, {}, clear=True),
-            patch.object(runner, "PROJECT_ROOT", self.root),
+            patch.object(runner, "ROOT", self.root),
         ):
             _, args = runner.parse_args([])
             self.assertEqual(
@@ -117,7 +117,7 @@ class ConfigurationTests(TemporaryDirectoryTestCase):
                 environment = {shell_url: "http://shell/v1", f"{shell_prefix}_API_KEY": "shell-key"}
                 with (
                     patch.dict(os.environ, environment, clear=True),
-                    patch.object(runner, "PROJECT_ROOT", self.root),
+                    patch.object(runner, "ROOT", self.root),
                 ):
                     before = dict(os.environ)
                     _, args = runner.parse_args([])
@@ -143,7 +143,7 @@ class ConfigurationTests(TemporaryDirectoryTestCase):
                 )
                 with (
                     patch.dict(os.environ, values if layer == "shell" else {}, clear=True),
-                    patch.object(runner, "PROJECT_ROOT", self.root),
+                    patch.object(runner, "ROOT", self.root),
                 ):
                     _, args = runner.parse_args([])
                     self.assertEqual(

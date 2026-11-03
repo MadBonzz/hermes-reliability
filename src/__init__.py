@@ -1,1 +1,1 @@
-"""Hermes multi-turn evaluation harness."""
+"""Property-oriented evaluation and scenario orchestration for agentic systems."""

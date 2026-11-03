@@ -32,21 +32,8 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Please get the confirmed tracking status for parcel PK-7 and save the service's status and location fields in {WORKSPACE}/tracking.json.",
-      "state_checks": [
-        {
-          "type": "json_equals",
-          "path": "tracking.json",
-          "json_path": "status",
-          "expected": "ready_for_pickup"
-        },
-        {
-          "type": "json_equals",
-          "path": "tracking.json",
-          "json_path": "location",
-          "expected": "North depot"
-        }
-      ],
+      "prompt": "Where is parcel PK-7? Get its confirmed tracking status and reply with the service's status and location fields as JSON.",
+      "state_checks": [],
       "process_checks": [
         {
           "type": "min_tool_call_count",
@@ -54,7 +41,34 @@
           "count": 4
         }
       ],
-      "output_checks": []
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": "ready_for_pickup",
+          "json_path": "status"
+        },
+        {
+          "type": "json_answer",
+          "expected": "North depot",
+          "json_path": "location"
+        }
+      ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Structured tool use under repeated errors",
+    "turns": 1,
+    "input_files": 0,
+    "services": 1,
+    "records": 0,
+    "dependency_depth": 2,
+    "fault_types": [
+      "transient_service_errors"
+    ],
+    "interaction": "mixed",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 3,
+    "asserted_file_paths": 0
+  }
 }

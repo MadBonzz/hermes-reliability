@@ -5,19 +5,19 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Which gyms can I walk to in at most ten minutes for a class starting before 07:00 on Tuesday? Use the saved listings in {WORKSPACE}; all times are local. Put the matching gym IDs in gyms.json as an array.",
-      "state_checks": [
+      "prompt": "Which gyms in the saved listings under {WORKSPACE} are at most ten minutes' walk away and have a Tuesday class before 07:00 local time? Reply with their IDs as a JSON array.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "gyms.json",
+          "type": "json_answer",
           "expected": [
             "harbor",
             "studio"
-          ]
+          ],
+          "unordered": true
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -31,5 +31,19 @@
         }
       ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Research constraint completeness",
+    "turns": 1,
+    "input_files": 2,
+    "services": 0,
+    "records": 9,
+    "dependency_depth": 3,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

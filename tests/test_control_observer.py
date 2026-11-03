@@ -1,7 +1,7 @@
 import threading
 from types import SimpleNamespace
 
-from src.control_observer import NativeControlObserver, control_coverage
+from src.evaluation.control_observer import NativeControlObserver, control_coverage
 from tests.helpers import TemporaryDirectoryTestCase
 
 

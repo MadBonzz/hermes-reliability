@@ -1,6 +1,6 @@
 import unittest
 
-from src.transcript_formatting import CHECKS, check_glossary, check_row, interpret_check
+from src.evaluation.transcript_formatting import CHECKS, check_glossary, check_row, interpret_check
 
 
 class TranscriptFormattingTests(unittest.TestCase):

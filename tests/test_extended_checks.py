@@ -2,10 +2,14 @@ import hashlib
 import json
 from pathlib import Path
 
-from src.checks import evaluate_process_checks, evaluate_state_checks
-from src.mock_services import json_equal
-from src.perturbations import apply_perturbations
-from src.runtime_support import workspace_manifest
+from src.evaluation.checks import (
+    evaluate_output_checks,
+    evaluate_process_checks,
+    evaluate_state_checks,
+)
+from src.evaluation.mock_services import json_equal
+from src.evaluation.perturbations import apply_perturbations
+from src.evaluation.runtime_support import workspace_manifest
 from tests.helpers import TemporaryDirectoryTestCase
 
 
@@ -144,17 +148,20 @@ class ExtendedCheckTests(TemporaryDirectoryTestCase):
                     "last_sequence": sequence,
                 }
                 for extra in ({}, {"events": [], "note": "supporting context"}):
-                    (self.root / "shipment_state.json").write_text(
-                        json.dumps({**expected, **extra})
+                    self.assertTrue(
+                        evaluate_output_checks(
+                            turn["output_checks"], json.dumps({**expected, **extra})
+                        )[0]
                     )
-                    self.assertTrue(evaluate_state_checks(turn["state_checks"], self.root)[0])
                 for key in expected:
                     invalid = {**expected, key: "incorrect"}
-                    (self.root / "shipment_state.json").write_text(json.dumps(invalid))
-                    self.assertFalse(evaluate_state_checks(turn["state_checks"], self.root)[0])
+                    self.assertFalse(
+                        evaluate_output_checks(turn["output_checks"], json.dumps(invalid))[0]
+                    )
                     del invalid[key]
-                    (self.root / "shipment_state.json").write_text(json.dumps(invalid))
-                    self.assertFalse(evaluate_state_checks(turn["state_checks"], self.root)[0])
+                    self.assertFalse(
+                        evaluate_output_checks(turn["output_checks"], json.dumps(invalid))[0]
+                    )
 
     def check(self, check, snapshot=None):
         return evaluate_state_checks([check], self.root, mock_snapshot=snapshot)[0]

@@ -4,9 +4,10 @@ from contextlib import redirect_stderr
 from copy import deepcopy
 from unittest.mock import patch
 
-from src import eval_runner as runner
-from src.runtime_support import sha256_file
-from src.scenario_validation import (
+from src.evaluation import evaluate as runner
+from src.evaluation import utils
+from src.evaluation.runtime_support import sha256_file
+from src.evaluation.scenario_validation import (
     external_schema_ref,
     load_scenarios,
     suite_sha256,
@@ -38,7 +39,7 @@ class ScenarioFileTests(TemporaryDirectoryTestCase):
 
     def setUp(self):
         super().setUp()
-        self.schema = runner.PROJECT_ROOT / "scenario.schema.json"
+        self.schema = runner.ROOT / "scenario.schema.json"
 
     def write(self, name, spec):
         path = self.root / name
@@ -91,7 +92,7 @@ class ScenarioFileTests(TemporaryDirectoryTestCase):
 
     def test_cli_validates_single_file_and_selection_without_loading_hermes(self):
         path = self.write("sample.json", scenario())
-        with patch.object(runner, "load_hermes") as load:
+        with patch.object(utils, "load_hermes") as load:
             self.assertEqual(0, runner.main(["--scenarios", str(path), "--validate-only"]))
             self.assertEqual(
                 0,
@@ -107,7 +108,7 @@ class ScenarioFileTests(TemporaryDirectoryTestCase):
             load.assert_not_called()
 
     def test_suite_validation_rejects_bad_checks_and_duplicates(self):
-        schema = runner.PROJECT_ROOT / "scenario.schema.json"
+        schema = runner.ROOT / "scenario.schema.json"
         suite = {"suite_name": "test", "scenarios": [scenario()]}
         validate_suite(suite, schema)
         suite["scenarios"].append(scenario())
@@ -126,7 +127,7 @@ class ScenarioFileTests(TemporaryDirectoryTestCase):
                 stderr = io.StringIO()
                 with (
                     redirect_stderr(stderr),
-                    patch.object(runner, "load_hermes") as load,
+                    patch.object(utils, "load_hermes") as load,
                     patch.object(runner, "write_json_atomic") as write,
                     self.assertRaises(SystemExit) as error,
                 ):

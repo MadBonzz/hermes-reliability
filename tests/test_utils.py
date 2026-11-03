@@ -3,8 +3,8 @@ import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src import eval_runner as runner
-from src import utils
+from src.evaluation import evaluate, utils
+from src.evaluation.evaluate import parse_args
 from tests.helpers import FakeAgent, RegistryTestCase
 
 
@@ -38,14 +38,14 @@ class UtilsTests(RegistryTestCase):
 
     def test_baseten_profile_key_aliases_and_explicit_overrides(self):
         for name in ("BASETEN_API_KEY", "BASETEN_KEY", "BAESTEN_KEY"):
-            with patch.object(runner, "load_eval_config", return_value={name: "test-key"}):
-                _, args = runner.parse_args(["--provider", "baseten"])
+            with patch.object(evaluate, "load_eval_config", return_value={name: "test-key"}):
+                _, args = parse_args(["--provider", "baseten"])
                 self.assertEqual("test-key", args.api_key)
                 self.assertEqual("https://inference.baseten.co/v1", args.base_url)
                 self.assertEqual("meta-models/muse-spark-open-1026", args.model)
                 self.assertEqual(0, args.request_interval)
-        with patch.object(runner, "load_eval_config", return_value={}):
-            _, args = runner.parse_args(
+        with patch.object(evaluate, "load_eval_config", return_value={}):
+            _, args = parse_args(
                 [
                     "--provider",
                     "baseten",
@@ -60,11 +60,11 @@ class UtilsTests(RegistryTestCase):
             )
 
     def test_cohere_profile_cli_overrides_and_required_reasoning(self):
-        with patch.object(runner, "load_eval_config", return_value={"COHERE_KEY": "test-key"}):
-            _, args = runner.parse_args(["--provider", "cohere"])
+        with patch.object(evaluate, "load_eval_config", return_value={"COHERE_KEY": "test-key"}):
+            _, args = parse_args(["--provider", "cohere"])
             self.assertEqual("command-a-plus-05-2026", args.model)
             self.assertEqual("test-key", args.api_key)
-            _, overridden = runner.parse_args(
+            _, overridden = parse_args(
                 [
                     "--provider",
                     "cohere",
@@ -113,9 +113,9 @@ class UtilsTests(RegistryTestCase):
     def test_path_escape_and_absolute_outside_rejected(self):
         for path in ("../outside", str(self.root.parent / "outside")):
             with self.assertRaises(ValueError):
-                runner.resolve_ws_path(self.root, path)
+                utils.resolve_ws_path(self.root, path)
         self.assertEqual(
-            self.root / "nested/file", runner.resolve_ws_path(self.root, "{WORKSPACE}/nested/file")
+            self.root / "nested/file", utils.resolve_ws_path(self.root, "{WORKSPACE}/nested/file")
         )
 
     def test_explicit_hermes_root_is_resolved_before_imports(self):
@@ -131,13 +131,13 @@ class UtilsTests(RegistryTestCase):
         with (
             patch.object(utils, "REPO_ROOT", None),
             patch.object(utils, "AIAgent", None),
-            patch.object(runner.sys, "path", list(runner.sys.path)),
+            patch.object(utils.sys, "path", list(utils.sys.path)),
             patch.dict(os.environ, {}, clear=False),
             patch.object(utils.importlib, "import_module", side_effect=lambda name: modules[name]),
         ):
-            selected = runner.load_hermes(str(root))
+            selected = utils.load_hermes(str(root))
             self.assertEqual(root, selected)
-            self.assertEqual(str(root), runner.sys.path[0])
+            self.assertEqual(str(root), utils.sys.path[0])
 
     def test_servers_use_chat_completions_with_exact_connection_settings(self):
         class CapturingAgent:

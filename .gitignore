@@ -4,10 +4,13 @@
 !.env.example
 
 # Local evaluation evidence: reports, traces, correlated requests, diagnostics,
-# and retained task workspaces. Authored inputs live in /scenarios/ and /scenarios_v2/.
+# and retained task workspaces. Authored inputs live in /scenarios/.
 /eval_harness/
 
-# Common alternative destinations for --output, --workspace-root, or log exports.
+# Verified local archives of retired benchmarks and private run evidence.
+/archives/
+
+# Common alternative destinations for --output or historical log exports.
 /results/
 /workspaces/
 /eval_workspace/
@@ -16,6 +19,7 @@
 /matched_requests/
 /eval_report.json
 /v2_runs/
+/runs/
 /orchestrator_runs/
 /reference_validation/
 /diagnostics/

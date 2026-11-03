@@ -5,18 +5,18 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Which branches of Lantern Cafe are open at 21:00 on Wednesday? Match the saved address and hours records in {WORKSPACE}; several branches share the same name. Save the matching branch IDs in open_branches.json as a JSON array.",
-      "state_checks": [
+      "prompt": "Which Lantern Cafe branches are open at 21:00 on Wednesday? Match the addresses and hours under {WORKSPACE} and reply with branch IDs as a JSON array.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "open_branches.json",
+          "type": "json_answer",
           "expected": [
             "L2"
-          ]
+          ],
+          "unordered": true
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -30,5 +30,19 @@
         }
       ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Entity identity across sources",
+    "turns": 1,
+    "input_files": 2,
+    "services": 0,
+    "records": 6,
+    "dependency_depth": 3,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

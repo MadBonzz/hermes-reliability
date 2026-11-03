@@ -5,19 +5,19 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "I'm choosing a three-night stay. My maximum total is $360 and I need step-free access. The offers in {WORKSPACE}/hotels.json are total prices including fees. Save all matching hotel IDs in shortlist.json as an array.",
-      "state_checks": [
+      "prompt": "Which three-night stays in {WORKSPACE}/hotels.json cost at most $360 including fees and have step-free access? Reply with a JSON array of every matching hotel ID.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "shortlist.json",
+          "type": "json_answer",
           "expected": [
             "river",
             "garden"
-          ]
+          ],
+          "unordered": true
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -32,32 +32,25 @@
             "arguments": {
               "path": "{WORKSPACE}/hotels.json"
             }
-          },
-          {
-            "tool": "write_file",
-            "arguments": {
-              "path": "{WORKSPACE}/shortlist.json",
-              "content": "[\n  \"river\",\n  \"garden\"\n]\n"
-            }
           }
         ],
-        "final_response": "Completed the requested update."
+        "final_response": "[\"river\", \"garden\"]"
       }
     },
     {
       "turn_number": 2,
-      "prompt": "Breakfast needs to be included too.",
-      "state_checks": [
+      "prompt": "Breakfast needs to be included too. Update the shortlist in your reply.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "shortlist.json",
+          "type": "json_answer",
           "expected": [
             "garden"
-          ]
+          ],
+          "unordered": true
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "reference": {
         "actions": [
           {
@@ -65,39 +58,26 @@
             "arguments": {
               "path": "{WORKSPACE}/hotels.json"
             }
-          },
-          {
-            "tool": "read_file",
-            "arguments": {
-              "path": "{WORKSPACE}/shortlist.json"
-            }
-          },
-          {
-            "tool": "write_file",
-            "arguments": {
-              "path": "{WORKSPACE}/shortlist.json",
-              "content": "[\n  \"garden\"\n]\n"
-            }
           }
         ],
-        "final_response": "Completed the requested update."
+        "final_response": "[\"garden\"]"
       }
     },
     {
       "turn_number": 3,
-      "prompt": "I can spend $400 now. Keep my other requirements.",
-      "state_checks": [
+      "prompt": "I can spend $400 now. Keep my other requirements and reply with the updated array.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "shortlist.json",
+          "type": "json_answer",
           "expected": [
             "garden",
             "hill"
-          ]
+          ],
+          "unordered": true
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "reference": {
         "actions": [
           {
@@ -105,38 +85,39 @@
             "arguments": {
               "path": "{WORKSPACE}/hotels.json"
             }
-          },
-          {
-            "tool": "read_file",
-            "arguments": {
-              "path": "{WORKSPACE}/shortlist.json"
-            }
-          },
-          {
-            "tool": "write_file",
-            "arguments": {
-              "path": "{WORKSPACE}/shortlist.json",
-              "content": "[\n  \"garden\",\n  \"hill\"\n]\n"
-            }
           }
         ],
-        "final_response": "Completed the requested update."
+        "final_response": "[\"garden\", \"hill\"]"
       }
     },
     {
       "turn_number": 4,
-      "prompt": "The higher budget was a mistake; we're back to $360. Please finalize shortlist.json.",
-      "state_checks": [
+      "prompt": "The higher budget was a mistake. We're back to $360. Give me the final array.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "shortlist.json",
+          "type": "json_answer",
           "expected": [
             "garden"
-          ]
+          ],
+          "unordered": true
         }
-      ],
-      "process_checks": [],
-      "output_checks": []
+      ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Hard constraints",
+    "turns": 4,
+    "input_files": 1,
+    "services": 0,
+    "records": 4,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

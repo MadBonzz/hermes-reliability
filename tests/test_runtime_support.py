@@ -1,12 +1,31 @@
 import hashlib
 import json
 
-from src.checks import evaluate_state_checks
-from src.runtime_support import current_turn_messages, read_jsonl, workspace_manifest
+from src.evaluation.checks import evaluate_state_checks
+from src.evaluation.runtime_support import current_turn_messages, read_jsonl, workspace_manifest
 from tests.helpers import TemporaryDirectoryTestCase
 
 
 class RuntimeSupportTests(TemporaryDirectoryTestCase):
+    def test_merged_user_boundary_requires_exact_prefix_metadata(self):
+        message = {
+            "role": "user",
+            "content": "summary\n\ncurrent",
+            "_merged_turn_prefix": "summary",
+        }
+        messages = [message, {"role": "assistant", "content": "answer"}]
+        self.assertEqual(messages, current_turn_messages(messages, "current"))
+        for change in (
+            {"_merged_turn_prefix": "other"},
+            {"_merged_turn_prefix": ""},
+            {"content": "summary\n\nquoted current"},
+            {"role": "assistant"},
+        ):
+            self.assertIsNone(current_turn_messages([{**message, **change}], "current"))
+        self.assertIsNone(
+            current_turn_messages([{"role": "user", "content": "summary\n\ncurrent"}], "current")
+        )
+
     def test_jsonl_reader_preserves_records_and_rejects_malformed_evidence(self):
         path = self.root / "events.jsonl"
         path.write_bytes(b'{"event":"first"}\r\n{"event":"second"}\r\n')

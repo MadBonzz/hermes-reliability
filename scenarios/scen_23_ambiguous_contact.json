@@ -44,7 +44,7 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Please send Sam the note 'Your camera is ready for pickup.' My contacts are in {WORKSPACE}/contacts.json.",
+      "prompt": "Please send Sam the note 'Your camera is ready for pickup.' My contacts are in {WORKSPACE}/contacts.json. Reply with JSON containing sent as a boolean, recipient as an email address or null, and recipient_options as an array of email addresses if I need to choose.",
       "state_checks": [
         {
           "type": "mock_state_equals",
@@ -64,14 +64,23 @@
       ],
       "output_checks": [
         {
-          "type": "contains_all",
-          "values": [
-            "Sam"
-          ]
+          "type": "json_answer",
+          "json_path": "sent",
+          "expected": false
         },
         {
-          "type": "regex_match",
-          "pattern": "which|clarif|confirm|specif|two|both|\\?|Lee.*Patel|Patel.*Lee"
+          "type": "json_answer",
+          "json_path": "recipient",
+          "expected": null
+        },
+        {
+          "type": "json_answer",
+          "json_path": "recipient_options",
+          "expected": [
+            "sam.lee@example.test",
+            "sam.patel@example.test"
+          ],
+          "unordered": true
         }
       ],
       "pre_turn_perturbations": [
@@ -90,7 +99,7 @@
             }
           }
         ],
-        "final_response": "Which Sam should receive the note: Sam Lee or Sam Patel?"
+        "final_response": "{\"sent\": false, \"recipient\": null, \"recipient_options\": [\"sam.lee@example.test\", \"sam.patel@example.test\"]}"
       }
     },
     {
@@ -122,5 +131,19 @@
       ],
       "output_checks": []
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Ambiguity handling before external action",
+    "turns": 2,
+    "input_files": 1,
+    "services": 1,
+    "records": 2,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "mixed",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }

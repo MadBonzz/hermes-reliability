@@ -1,19 +1,11 @@
 # Local agent reliability property catalog
 
-2026-10-29 execution revision: the 47 multi-turn scenarios now include 62 authored
-reference-prefix recipes. Failed ordinary attempts retain their score; separate
-diagnostic variants expose later challenges after a verified successful prefix.
-Synthetic assistant history and real tool results are distinguished in evidence.
-CLI file-tool path guards are evaluator interventions, not native Hermes property
-enforcement. Terminal/code remain unrestricted; this is not OS sandboxing.
-Compare source/configuration hashes across this change, not raw pass rates alone.
-
-This is the consolidated master list for the laptop-oriented exploration suite.
-There are **91 authored scenarios, 157 user turns, and one to five turns per
-scenario**. Scenarios 21–80 expanded the original suite; scenarios 81–91 adapt
-distinct teammate experiments and add two matched controls. Scenarios 1–20 were rewritten.
-Scenario count is not a count of independent properties: related tasks probe
-different boundaries and several tasks cover more than one property.
+The current suite contains **109 scenarios and 192 user turns**. Scenarios
+1–91 cover the original property families and teammate probes; scenarios 92–109
+vary three workflows across 2, 5 and 10 files and one or three user turns.
+Diagnostic continuations retain failed ordinary scores and expose later challenges
+using verified authored prefixes. See [BENCHMARK.md](BENCHMARK.md) for controlled
+branches, complexity dimensions and cost accounting.
 
 The JSON files in [scenarios/](scenarios/) are authoritative for prompts, setup,
 faults, and assertions. This catalog records coverage and limits, not duplicate
@@ -44,19 +36,19 @@ not the hidden fault schedule or expected answer.
 
 | Family | Properties retained for local evaluation | Scenario coverage |
 |---|---|---|
-| Intent and human control | Complete the requested work; retain hard constraints; resolve material ambiguity; detect infeasible combinations; apply corrections; respect approval scope; cancel queued work; stop at approved boundaries. | 21–26, 65 |
-| Evidence and research | Use authoritative/current sources; honor historical cutoffs; match entities; complete pagination; reconcile conflicting observations; distinguish unknown from false; avoid duplicate evidence. | 4, 9, 28–40, 66 |
-| Safety and effect boundaries | Keep accepted state intact on failure; honor prerequisites; preserve unrelated resources; distinguish review from execution; remain useful when safe. | 2, 12, 15, 22, 44, 54–55, 62–63, 68 |
-| Data integrity and artifacts | Validate semantics and types; preserve records and relationships; maintain derived views; merge compatible edits; migrate reversibly; preserve literal text; produce real usable artifacts. | 14, 38, 43–46, 54–61, 78 |
-| Transactions and recovery | Reconcile uncertain outcomes; keep logical operation identity; distinguish retries from new intent; resume incomplete work; compensate partial workflows; recover from trusted records. | 1–2, 17–19, 42, 44, 47–48 |
+| Intent and human control | Complete the requested work; retain hard constraints; resolve material ambiguity; detect infeasible combinations; apply corrections; respect approval scope; cancel queued work; stop at approved boundaries. | 21â€“26, 65 |
+| Evidence and research | Use authoritative/current sources; honor historical cutoffs; match entities; complete pagination; reconcile conflicting observations; distinguish unknown from false; avoid duplicate evidence. | 4, 9, 28â€“40, 66 |
+| Safety and effect boundaries | Keep accepted state intact on failure; honor prerequisites; preserve unrelated resources; distinguish review from execution; remain useful when safe. | 2, 12, 15, 22, 44, 54â€“55, 62â€“63, 68 |
+| Data integrity and artifacts | Validate semantics and types; preserve records and relationships; maintain derived views; merge compatible edits; migrate reversibly; preserve literal text; produce real usable artifacts. | 14, 38, 43â€“46, 54â€“61, 78 |
+| Transactions and recovery | Reconcile uncertain outcomes; keep logical operation identity; distinguish retries from new intent; resume incomplete work; compensate partial workflows; recover from trusted records. | 1â€“2, 17â€“19, 42, 44, 47â€“48 |
 | Concurrency and ordering | Handle stale versions; preserve other writers' edits; refresh expired editing authority; distinguish chronological time from sequence order. | 3, 8, 16, 41, 49, 76 |
-| Availability and progress | Recognize transient/permanent failures; handle pending jobs and capacity backpressure; use equivalent fallback services; return to recovered dependencies; terminate cyclic traversal. | 13, 19–20, 50–53, 75, 77 |
-| Trust and authorization | Treat document/tool content as data; retain task and workspace boundaries; avoid unrelated privileged effects; honor application policy and enabled interfaces. | 10, 12, 22–23, 54, 57, 68, 71–72 |
-| Confidentiality | Export only approved information; retain derived-data sensitivity; minimize diagnostic disclosure; avoid cross-client contamination; avoid retaining a literal transient secret. | 10–11, 27, 67, 69–72 |
-| Memory and task continuity | Persist task-relevant constraints in files; recover after context loss; apply current rules; retain requirements through distractions and revisions. | 5, 7–8, 25, 42, 73–74 |
-| Tool/protocol behavior | Emit actual structured calls; remain operational through repeated tool errors; honor argument/value contracts; correlate an accepted job with its completed result. | 1, 19, 41, 47, 49–52, 57, 59–61 |
-| Scheduling and bounded work | Update existing jobs without duplicates; cancel before delivery; respect partial-batch limits; use local-time semantics across an offset change. | 6, 26, 64–65, 79–80 |
-| Operational integrity | Record errors despite eventual success; clean owned abandoned resources; verify checksums; repair causes without weakening validators; apply alert thresholds and deduplication. | 28, 63–64, 66, 77–79 |
+| Availability and progress | Recognize transient/permanent failures; handle pending jobs and capacity backpressure; use equivalent fallback services; return to recovered dependencies; terminate cyclic traversal. | 13, 19â€“20, 50â€“53, 75, 77 |
+| Trust and authorization | Treat document/tool content as data; retain task and workspace boundaries; avoid unrelated privileged effects; honor application policy and enabled interfaces. | 10, 12, 22â€“23, 54, 57, 68, 71â€“72 |
+| Confidentiality | Export only approved information; retain derived-data sensitivity; minimize diagnostic disclosure; avoid cross-client contamination; avoid retaining a literal transient secret. | 10â€“11, 27, 67, 69â€“72 |
+| Memory and task continuity | Persist task-relevant constraints in files; recover after context loss; apply current rules; retain requirements through distractions and revisions. | 5, 7â€“8, 25, 42, 73â€“74 |
+| Tool/protocol behavior | Emit actual structured calls; remain operational through repeated tool errors; honor argument/value contracts; correlate an accepted job with its completed result. | 1, 19, 41, 47, 49â€“52, 57, 59â€“61 |
+| Scheduling and bounded work | Update existing jobs without duplicates; cancel before delivery; respect partial-batch limits; use local-time semantics across an offset change. | 6, 26, 64â€“65, 79â€“80 |
+| Operational integrity | Record errors despite eventual success; clean owned abandoned resources; verify checksums; repair causes without weakening validators; apply alert thresholds and deduplication. | 28, 63â€“64, 66, 77â€“79 |
 
 ## Realistic workflow grounding
 
@@ -64,7 +56,7 @@ The [AssistantBench dataset](https://huggingface.co/datasets/AssistantBench/Assi
 contains concrete tasks about early gym classes, vegan meals near a landmark,
 shipping price comparisons, museum membership savings, weather frequencies,
 historical house sales, and scientific data releases at a past date. These
-informed scenarios 29–36: constraints, joins, eligibility, costs, missing data,
+informed scenarios 29â€“36: constraints, joins, eligibility, costs, missing data,
 entity identity, and historical cutoffs. The names, prices, records, and answers
 here are synthetic fixtures, not current claims about real businesses.
 
@@ -86,11 +78,11 @@ claim that each pictured runtime branch has been fault-injected.
 
 | Diagram boundary | Reliability question | Current evidence and limit |
 |---|---|---|
-| Restore/build prompt; snapshot context | Do current constraints survive revisions, noisy results, and context loss? | 5, 7, 73–74 use files and conversation history. Native MemoryStore snapshots are deferred. |
-| Validate, cap, deduplicate tool calls | Are real calls emitted with usable arguments, and are repeated business effects avoided? | 47, 50, 59–61 test observable calls/effects. Runtime call-ID deduplication is distinct from the payment service's business idempotency. |
+| Restore/build prompt; snapshot context | Do current constraints survive revisions, noisy results, and context loss? | 5, 7, 73â€“74 use files and conversation history. Native MemoryStore snapshots are deferred. |
+| Validate, cap, deduplicate tool calls | Are real calls emitted with usable arguments, and are repeated business effects avoided? | 47, 50, 59â€“61 test observable calls/effects. Runtime call-ID deduplication is distinct from the payment service's business idempotency. |
 | Pre-tool SessionDB flush and result persistence | Can a failed persistence step prevent execution, or leave an unrecorded completed effect? | An unknown service outcome is exercised in 1 and 47; actual SessionDB flush/result-persistence failures are deferred. |
-| Sequential/parallel segment execution | Are shared updates and compensations consistent with dependencies? | 3, 41, 48–49. CAS and compensation have deterministic service enforcement; forced parallel interleavings are not covered. |
-| Normalize response; retry/recover/fallback | Does the agent keep making valid progress and report recovery truthfully? | 19–20, 50, 53, 77 inject tool errors. Malformed provider responses and layered API retry behavior remain separate work. |
+| Sequential/parallel segment execution | Are shared updates and compensations consistent with dependencies? | 3, 41, 48â€“49. CAS and compensation have deterministic service enforcement; forced parallel interleavings are not covered. |
+| Normalize response; retry/recover/fallback | Does the agent keep making valid progress and report recovery truthfully? | 19â€“20, 50, 53, 77 inject tool errors. Malformed provider responses and layered API retry behavior remain separate work. |
 | Text stop gates and final result envelope | Does the final answer correspond to completed work? | 22, 51, 61 require committed effects or real artifacts. Internal finalizer branches are not directly instrumented. |
 | Child agents and late completion delivery | Can delayed results be correlated, cancelled, or rejected after intent changes? | 26 and 51 model queued work and polling locally; real delegation and stale child completions are deferred. |
 
@@ -191,7 +183,7 @@ a difficulty ordering. Read the linked JSON for the exact contract.
 | 7 | [Update and apply an editorial skill file](scenarios/scen_07_skill_cache_invalidation.json) | Current workspace instruction use; not native skill-cache verification | 3 |
 | 8 | [Prepare a deployment manifest after configuration changes](scenarios/scen_08_external_disk_mutation.json) | External-state freshness; preservation of unrelated settings | 2 |
 | 9 | [Summarize branch totals with an outstanding report](scenarios/scen_09_partial_source_missing.json) | Partial-source accounting without fabricating missing data | 2 |
-| 10 | [Summarize a meeting email containing an injected command](scenarios/scen_10_indirect_prompt_injection.json) | Untrusted email handling; disclosure prevention and honest audit | 2 |
+| 10 | [Summarize a meeting email containing an injected command](scenarios/scen_10_indirect_prompt_injection.json) | Untrusted email handling; disclosure prevention and honest audit | 1 |
 | 11 | [Store a verification checksum without storing its secret](scenarios/scen_11_privacy_taint_tracking.json) | Limited literal-secret disclosure checks in files, arguments, and output | 2 |
 | 12 | [Review untrusted setup instructions](scenarios/scen_12_confused_deputy_readme.json) | Document analysis without unauthorized execution | 1 |
 | 13 | [Total a linked collection with a circular reference](scenarios/scen_13_liveness_cycle_detection.json) | Bounded traversal and unique-record aggregation | 2 |
@@ -274,9 +266,32 @@ a difficulty ordering. Read the linked JSON for the exact contract.
 | 90 | [Confirm a note with a truthful acknowledgement](scenarios/scen_90_confirmed_note_save_control.json) | Matched no-fault control for 81 | 1 |
 | 91 | [Confirm a note with explicit recovery advice](scenarios/scen_91_resave_with_recovery_hint.json) | Matched recovery-hint intervention for 88 | 2 |
 
+### Scaled workflow panel
+
+| # | User workflow | Property focus | Turns |
+|---|---|---|---|
+| 92 | [Reimbursement Batch across 2 files and one turn](scenarios/scen_92_reimbursement_batch_2_files_one_turn.json) | reimbursement batch | 1 |
+| 93 | [Reimbursement Batch across 2 files and three turns](scenarios/scen_93_reimbursement_batch_2_files_three_turns.json) | reimbursement batch | 3 |
+| 94 | [Reimbursement Batch across 5 files and one turn](scenarios/scen_94_reimbursement_batch_5_files_one_turn.json) | reimbursement batch | 1 |
+| 95 | [Reimbursement Batch across 5 files and three turns](scenarios/scen_95_reimbursement_batch_5_files_three_turns.json) | reimbursement batch | 3 |
+| 96 | [Reimbursement Batch across 10 files and one turn](scenarios/scen_96_reimbursement_batch_10_files_one_turn.json) | reimbursement batch | 1 |
+| 97 | [Reimbursement Batch across 10 files and three turns](scenarios/scen_97_reimbursement_batch_10_files_three_turns.json) | reimbursement batch | 3 |
+| 98 | [Customer Retirement across 2 files and one turn](scenarios/scen_98_customer_retirement_2_files_one_turn.json) | customer retirement | 1 |
+| 99 | [Customer Retirement across 2 files and three turns](scenarios/scen_99_customer_retirement_2_files_three_turns.json) | customer retirement | 3 |
+| 100 | [Customer Retirement across 5 files and one turn](scenarios/scen_100_customer_retirement_5_files_one_turn.json) | customer retirement | 1 |
+| 101 | [Customer Retirement across 5 files and three turns](scenarios/scen_101_customer_retirement_5_files_three_turns.json) | customer retirement | 3 |
+| 102 | [Customer Retirement across 10 files and one turn](scenarios/scen_102_customer_retirement_10_files_one_turn.json) | customer retirement | 1 |
+| 103 | [Customer Retirement across 10 files and three turns](scenarios/scen_103_customer_retirement_10_files_three_turns.json) | customer retirement | 3 |
+| 104 | [Family Hike Research across 2 files and one turn](scenarios/scen_104_family_hike_research_2_files_one_turn.json) | family hike research | 1 |
+| 105 | [Family Hike Research across 2 files and three turns](scenarios/scen_105_family_hike_research_2_files_three_turns.json) | family hike research | 3 |
+| 106 | [Family Hike Research across 5 files and one turn](scenarios/scen_106_family_hike_research_5_files_one_turn.json) | family hike research | 1 |
+| 107 | [Family Hike Research across 5 files and three turns](scenarios/scen_107_family_hike_research_5_files_three_turns.json) | family hike research | 3 |
+| 108 | [Family Hike Research across 10 files and one turn](scenarios/scen_108_family_hike_research_10_files_one_turn.json) | family hike research | 1 |
+| 109 | [Family Hike Research across 10 files and three turns](scenarios/scen_109_family_hike_research_10_files_three_turns.json) | family hike research | 3 |
+
 ## Teammate scenario integration (2026-10-31)
 
-Scenarios 81–91 adapt the experiments reviewed from the teammate's
+Scenarios 81â€“91 adapt the experiments reviewed from the teammate's
 `agent-correctness` repository (`scenarios.py` and `plugin/__init__.py`). They add
 15 user turns and four reference-prefix recipes. The current suite has 51
 multi-turn scenarios and 66 prerequisite references. The first 80 JSON files and
@@ -377,7 +392,7 @@ Report challenge reachability when analyzing runs. A setup/early-turn failure
 does not establish how the agent would handle a later perturbation. Error outcomes
 must be distinguished from ordinary assertion failures.
 
-**Benchmark revision (2026-10-27):** scenarios 1–20 retain their IDs but have new
+**Benchmark revision (2026-10-27):** scenarios 1â€“20 retain their IDs but have new
 prompts, fixture placement, turn counts, and stronger/less brittle assertions.
 Some overbroad names were narrowed. They are changed benchmark definitions, not
 equivalent restatements of the old tests. Preserve historical reports and compare

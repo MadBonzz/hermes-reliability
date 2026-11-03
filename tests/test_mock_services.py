@@ -2,7 +2,7 @@ import concurrent.futures
 import copy
 import json
 
-from src.perturbations import apply_perturbations
+from src.evaluation.perturbations import apply_perturbations
 from tests.helpers import RegistryTestCase
 
 

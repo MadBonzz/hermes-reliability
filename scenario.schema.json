@@ -1,12 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "HermesMultiTurnEvalScenario",
+  "title": "AgentCorrectness",
   "type": "object",
   "required": [
     "id",
     "name",
     "property_tested",
-    "turns"
+    "turns",
+    "benchmark_version",
+    "complexity"
   ],
   "properties": {
     "id": {
@@ -531,7 +533,9 @@
                     "mock_text_matches_file",
                     "mock_json_matches_file",
                     "csv_rows_equal",
-                    "python_ast_equals"
+                    "python_ast_equals",
+                    "settlement_files_match",
+                    "artifact_python"
                   ]
                 },
                 "path": {
@@ -559,6 +563,28 @@
                     "before_turn",
                     "after_turn"
                   ]
+                },
+                "service": {
+                  "type": "string"
+                },
+                "item_key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "For object array items, compare this dotted field; scalar items retain their values. Missing fields fail."
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "python": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Private Python behavioral verifier, executed only on an isolated Docker copy after the turn. WORKSPACE is its physical artifact root. Return normally on success; raise/assert on failure. No provider access or live services."
+                },
+                "timeout_seconds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 30
                 }
               },
               "additionalProperties": false,
@@ -898,6 +924,58 @@
                       }
                     }
                   }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "settlement_files_match",
+                        "description": "Reimbursement-specific contract: exact per-invoice JSON files with invoice_id, recipient, amount_usd, receipt_id and literal status paid; receipt IDs bind to committed service receipts. Declare this output contract to the user. This check does not mirror arbitrary service status labels."
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "path",
+                      "expected",
+                      "service"
+                    ],
+                    "properties": {
+                      "expected": {
+                        "type": "array",
+                        "minItems": 1
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "item_key"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "type": {
+                        "const": "json_array_unordered"
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "artifact_python"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "name",
+                      "python"
+                    ]
+                  }
                 }
               ]
             }
@@ -1205,6 +1283,156 @@
         "additionalProperties": false
       },
       "minItems": 1
+    },
+    "benchmark_version": {
+      "const": 2
+    },
+    "complexity": {
+      "type": "object",
+      "required": [
+        "family",
+        "turns",
+        "input_files",
+        "services",
+        "records",
+        "dependency_depth",
+        "fault_types",
+        "interaction"
+      ],
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "input_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "services": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dependency_depth": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "fault_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "interaction": {
+          "enum": [
+            "answer",
+            "service_action",
+            "artifact_edit",
+            "mixed"
+          ]
+        },
+        "scale_level": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "notes": {
+          "type": "string"
+        },
+        "fault_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "asserted_file_paths": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "experiment": {
+      "type": "object",
+      "required": [
+        "branch_turn",
+        "intervention"
+      ],
+      "properties": {
+        "branch_turn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "intervention": {
+          "type": "string"
+        },
+        "baseline_turns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "turn_number"
+            ]
+          }
+        },
+        "baseline_behaviors": {
+          "type": "object"
+        },
+        "baseline_complexity": {
+          "type": "object",
+          "properties": {
+            "fault_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "fault_types": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "fault_count",
+            "fault_types"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": [
+        "payload_marker"
+      ],
+      "properties": {
+        "payload_marker": {
+          "type": "string"
+        },
+        "harmful_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "harmful_argument_substrings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

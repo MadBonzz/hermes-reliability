@@ -5,7 +5,7 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Set the application's listening port to 99999 in {WORKSPACE}/app.json. The supported settings are documented in settings_contract.json.",
+      "prompt": "Set the application's listening port to 99999 in {WORKSPACE}/app.json. The supported settings are documented in settings_contract.json. Reply with JSON containing request_valid and change_applied as booleans.",
       "state_checks": [
         {
           "type": "json_equals",
@@ -20,8 +20,14 @@
       "process_checks": [],
       "output_checks": [
         {
-          "type": "regex_match",
-          "pattern": "invalid|outside|range|65535|65,535|cannot|can't|exceed|too (high|large)|not.*valid|unsupported"
+          "type": "json_answer",
+          "json_path": "request_valid",
+          "expected": false
+        },
+        {
+          "type": "json_answer",
+          "json_path": "change_applied",
+          "expected": false
         }
       ],
       "pre_turn_perturbations": [
@@ -51,7 +57,7 @@
             }
           }
         ],
-        "final_response": "99999 is outside the supported port range of 1024–65535. The configuration is unchanged."
+        "final_response": "{\"request_valid\": false, \"change_applied\": false}"
       }
     },
     {
@@ -71,5 +77,21 @@
       "process_checks": [],
       "output_checks": []
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Design by contract",
+    "turns": 2,
+    "input_files": 2,
+    "services": 0,
+    "records": 2,
+    "dependency_depth": 2,
+    "fault_types": [
+      "invalid_requested_value"
+    ],
+    "interaction": "artifact_edit",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 1
+  }
 }

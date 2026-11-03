@@ -1,7 +1,6 @@
-import hashlib
 import json
 
-from src.attribute_failures import attribute_turn, contract_for
+from src.evaluation.attribute_failures import attribute_turn
 from tests.helpers import TemporaryDirectoryTestCase
 
 
@@ -129,17 +128,3 @@ class AttributionTests(TemporaryDirectoryTestCase):
         events.append({"event": "api_response_headers", "request_id": "c", "status_code": 429})
         findings = attribute_turn(self.record(), {}, {}, events, [], "traces/s")["findings"]
         self.assertEqual(["provider_or_configuration"], [f["layer"] for f in findings])
-
-    def test_old_contract_requires_exact_hash_and_embedded_contract_is_preferred(self):
-        path = self.root / "s.json"
-        path.write_text('{"id":"s","turns":[]}')
-        report = {
-            "scenario_files": [{"id": "s", "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}]
-        }
-        self.assertEqual("source_hash_verified", contract_for(report, {"id": "s"}, self.root)[1])
-        path.write_text('{"id":"s","turns":[{}]}')
-        self.assertIsNone(contract_for(report, {"id": "s"}, self.root)[0])
-        self.assertEqual(
-            "frozen_in_report",
-            contract_for(report, {"id": "s", "scenario_contract": {}}, self.root)[1],
-        )

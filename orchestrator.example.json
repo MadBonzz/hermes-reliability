@@ -1,28 +1,31 @@
 {
-  "scope": "Evaluate the complete agentic system on local software/distributed-system properties. Expand coverage and investigate past failures with discriminating end-to-end tests.",
+  "scope": "Explore software and distributed-system properties of the complete Hermes agent system using source-grounded, realistic user workflows. Start from scratch.",
+  "source": {
+    "repository": "https://github.com/NousResearch/hermes-agent.git",
+    "revision": "f0d94882e89ab8d4098b5bb2f166adfb9ee0a0ab"
+  },
   "orchestrator": {
-    "base_url": "http://localhost:1234/v1",
-    "model": "YOUR_ORCHESTRATOR_MODEL_ID",
-    "api_key_env": "ORCHESTRATOR_API_KEY",
-    "max_request_characters": 2000000,
-    "timeout_seconds": 180
+    "base_url": "https://api.meta.ai/v1",
+    "model": "muse-spark-1.3-contributor",
+    "api_key_env": "META_KEY",
+    "timeout_seconds": 180,
+    "read_timeout_seconds": null
   },
   "target": {
-    "base_url": "http://localhost:1234/v1",
-    "model": "YOUR_TARGET_MODEL_ID",
-    "api_key_env": "TARGET_API_KEY"
+    "base_url": "https://api.cohere.ai/compatibility/v1",
+    "model": "command-a-03-2025",
+    "api_key_env": "COHERE_KEY"
   },
   "adapter": {
     "kind": "hermes",
     "python": "PATH_TO_HERMES_ENVIRONMENT_PYTHON",
-    "hermes_root": "PATH_TO_HERMES_CHECKOUT",
     "max_iterations": 15,
-    "request_interval": 0,
-    "timeout_seconds": 3600,
-    "capabilities": "The supplied scenario schema and existing harness define supported mocks, faults, checks and reference prefixes. File guards cover native file tools only; terminal/Python are not sandboxed. Unsupported new mechanisms require adapter development."
+    "request_interval": 7
   },
-  "documents": ["AGENTS.md", "PROPERTY_CATALOG.md"],
-  "diagrams": [],
-  "past_scenarios": ["scenarios"],
-  "limits": {"cycles": 3, "scenarios_per_cycle": 3, "requests": 40, "quiet_cycles": 2}
+  "limits": {
+    "rounds": 5,
+    "initial_tests": 5,
+    "active_tests": 12,
+    "generations": 3
+  }
 }

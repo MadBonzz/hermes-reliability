@@ -2,10 +2,9 @@
 
 This file describes the project's purpose, architecture, evaluation contract, and
 maintenance conventions. Read [README.md](README.md) for installation and usage.
-The current V2 suite uses [scenario_v2.schema.json](scenario_v2.schema.json) and
-[scenarios_v2/](scenarios_v2/). V1 uses [scenario.schema.json](scenario.schema.json)
-and [scenarios/](scenarios/). Read those files for exact tasks and assertions. Keep those
-sources authoritative instead of maintaining copies of every prompt here.
+The suite uses [scenario.schema.json](scenario.schema.json) and [scenarios/](scenarios/).
+These are authoritative for tasks and assertions. The retired first edition and
+its run evidence are stored in the ignored local archive under `archives/`.
 
 ## Motivation and scope
 
@@ -21,8 +20,8 @@ properties. Their names express the intended capability, not a proof that a pass
 establishes a general systems or security guarantee.
 
 The evaluated system consists of the **model, serving API/tool protocol, and
-Hermes runtime together**. The harness supplies the tasks, faults, mocks, and
-scoring. A poor result can expose an agent-system failure, an evaluation defect,
+selected agent runtime together** (Hermes, OpenHands or DeerFlow). The harness
+supplies the tasks, faults, mocks, and scoring. A poor result can expose an agent-system failure, an evaluation defect,
 or both. Distinguish those using evidence rather than assigning all failures to
 the model by default.
 
@@ -34,7 +33,7 @@ exact model identifier.
 
 ### Diagnostic continuations and file access (2026-10-29)
 
-CLI runs enable `src/execution_isolation.py` file-tool path guards. Only the four
+CLI runs enable `src/evaluation/execution_isolation.py` file-tool path guards. Only the four
 file tools are wrapped; terminal/code execution retain their native capabilities.
 This is a path policy, not OS isolation. Never claim all evaluator evidence is
 inaccessible. `EVAL_PATH_DENIED` is harness enforcement, not native Hermes behavior.
@@ -42,7 +41,7 @@ No container is required. Relative paths follow the task cwd within the scenario
 resolved escapes, recursive search escapes and hard-linked files are rejected.
 
 Non-final turns can declare an authored `reference` with `actions` and
-`final_response`. The bundled suite covers all 66 prerequisite turns. Normal
+`final_response`. The suite has 83 prerequisite turns. Normal
 attempts retain failed gates. A fresh `__reference_after_N` variant executes a
 successful prefix through real registered tools, including actual service effects,
 original perturbations and all checks. Only a validated prefix permits subsequent
@@ -51,7 +50,7 @@ are real. Do not call this a successful model execution or an exact reconstructi
 of hidden model state. `reference_prefix` retains histories and correct state
 copies. `diagnostic_reports` is separate from the ordinary score. Failed reference
 validation is a harness error. Later failed gates can branch from a longer prefix.
-`src/check_reference_prefixes.py` validates prefixes without model inference,
+`src/evaluation/check_reference_prefixes.py` validates prefixes without model inference,
 writing private evidence under `eval_harness/reference_validation/`.
 
 JSONL traces now include before/after workspace and service snapshots per tool.
@@ -70,13 +69,13 @@ generated home/configuration is private runtime evidence, not source configurati
 
 ## Repository map
 
-Benchmark v2 is in `scenarios_v2/`, with `scenario_v2.schema.json` and entry point
-`src/eval_v2.py`. Read `BENCHMARK_V2.md` before changing v2. Its worker uses neutral
-temporary paths and private correlation. Controlled shared prefixes support only
-portable stateful-service calls with no filesystem state. Preserve this validation
-boundary until native runtime checkpointing is implemented. Prefix costs are
-charged once and branch costs separately. V1 remains selectable through its
-existing runner. Keep v2-only contracts out of historical result interpretation.
+The benchmark is in `scenarios/`, with `scenario.schema.json` and entry point
+`src/evaluation/evaluate.py`. Read `BENCHMARK.md` before changing execution contracts. Workers
+use neutral temporary paths and private correlation. Shared prefixes support
+portable service state with no task filesystem state. Preserve this boundary
+until native runtime checkpointing is implemented. Prefix costs are charged once
+and branch costs separately. `benchmark_version: 2` identifies the current data
+format; it is not a selectable legacy execution mode.
 
 | Path | Responsibility |
 |---|---|
@@ -87,33 +86,49 @@ existing runner. Keep v2-only contracts out of historical result interpretation.
 | `.env.example` | Public configuration template. `.env` is private and ignored. |
 | `scenario.schema.json` | Draft 7 JSON Schema for a single scenario. |
 | `scenarios/*.json` | Authored benchmark inputs: one scenario per file, including its mock definitions. |
-| `src/eval_runner.py` | CLI, scenario/turn orchestration, checkpoints, summaries, workspace lifecycle. |
-| `src/scenario_validation.py` | File discovery, schema/semantic validation, source metadata, canonical suite hash. |
-| `src/mock_registry.py` | Generic mock handlers, scenario-specific registration, registry/cache restoration. |
-| `src/mock_services.py` | Evaluator-owned service state, conditional updates, idempotency, and committed effects. |
-| `src/perturbations.py` | Evaluator-controlled file edits, permissions, fault flags, context compression/truncation. |
-| `src/checks.py` | State, process, and output assertions. |
-| `src/utils.py` | Configuration, lazy Hermes imports, agent construction, workspace binding, paths, tool-call extraction. |
-| `src/runtime_support.py` | Turn JSONL traces, serialization, atomic JSON checkpoints, hashes, file snapshots. |
-| `src/api_trace.py` | HTTPX request/response capture, streaming evidence, correlation, credential redaction. |
-| `src/check_hermes_integration.py` | Offline checks against the real installed Hermes tools and workspace behavior. |
-| `src/correlate_lmstudio_logs.py` | Optional post-run matching of LM Studio server requests to evaluation turns. |
-| `src/orchestrator.py` | Separate generation/review/execution/analysis loop and indexed evidence access. |
-| `src/orchestrator_adapters.py`, `src/orchestrator_hermes_worker.py` | Trusted command-adapter contract and fresh-process Hermes bridge. |
+| `src/evaluation/evaluate.py`, `src/evaluation/hermes_runner.py` | Campaign CLI and shared Hermes turn execution, checkpoints and workspace lifecycle. |
+| `src/evaluation/scenario_validation.py` | File discovery, schema/semantic validation, source metadata, canonical suite hash. |
+| `src/evaluation/mock_registry.py` | Generic mock handlers, scenario-specific registration, registry/cache restoration. |
+| `src/evaluation/mock_services.py` | Evaluator-owned service state, conditional updates, idempotency, and committed effects. |
+| `src/evaluation/perturbations.py` | Evaluator-controlled file edits, permissions, fault flags, context compression/truncation. |
+| `src/evaluation/checks.py` | State, process, and output assertions. |
+| `src/evaluation/utils.py` | Configuration, lazy Hermes imports, agent construction, workspace binding, paths, tool-call extraction. |
+| `src/evaluation/runtime_support.py` | Turn JSONL traces, serialization, atomic JSON checkpoints, hashes, file snapshots. |
+| `src/evaluation/api_trace.py` | HTTPX request/response capture, streaming evidence, correlation, credential redaction. |
+| `src/evaluation/check_hermes_integration.py` | Offline checks against the real installed Hermes tools and workspace behavior. |
+| `src/orchestrator/prompts.py` | Authored main/review/analysis instructions and response-repair feedback; import these rather than embedding prompts in runtime code. |
+| `src/orchestrator/runner.py` | Separate generation/review/execution/analysis loop and indexed evidence access. |
+| `src/orchestrator/adapters.py`, `src/orchestrator/hermes_worker.py` | Trusted command-adapter contract and fresh-process Hermes bridge. |
+| `src/evaluation/agent_container.py`, `src/evaluation/agent_worker.py`, `src/evaluation/native_agent_bridges.py` | Isolated native OpenHands/DeerFlow runtimes and inference/mock relay. |
+| `src/evaluation/eval_container_worker.py`, `src/orchestrator/container_worker.py` | Native phase execution and authored-prefix preflight. |
 | `ORCHESTRATOR.md`, `orchestrator.example.json` | Orchestrator operation, scope and optional settings. |
 | `tests/helpers.py` | Shared temporary-directory fixtures and a fake Hermes registry/agent. |
 | `tests/test_*.py` | Component and lifecycle regression tests using `unittest`. |
 | `eval_harness/` | Entirely ignored local run data; never a source-code/configuration directory. |
 
-Keep implementation files directly inside `src/` and regression tests inside
-`tests/`. Retain one JSON file per scenario. Do not restore the old combined suite,
-Python scenario generator, Windows launchers, nested source package, or separate
+Keep evaluation implementation inside `src/evaluation/`, orchestration inside
+`src/orchestrator/`, and regression tests inside `tests/`. Retain one JSON file per scenario. Do not restore the old combined suite,
+Python scenario generator, Windows launchers, obsolete flat entry-point wrappers, or separate
 requirements file. The authored JSONs are edited directly.
 
 ## Runtime and configuration
 
+OpenHands and DeerFlow use the container adapters documented in ORCHESTRATOR.md.
+Do not import Hermes or apply Hermes guard attribution in those profiles. Native
+tool snapshots and API events are available, but internal native guards are not
+instrumented. Keep source/image revision checks, nonroot/no-mount/no-network
+Docker boundaries and host-only provider credentials intact. The generated
+evaluator itself is host code, not sandboxed by the target container. Portable
+prefixes remain service-only; DeerFlow memory checkpointing flushes auxiliary
+inference, which must remain inside API capture and cost accounting through
+shutdown. Failed native turns must retain attempted calls and pre-cleanup state.
+Select the native reference-tool profile throughout schema loading, authoring and
+preflight; the default remains Hermes for historical callers. DeerFlow task files
+belong under `/mnt/user-data/workspace`, not the virtual parent. Retain auxiliary
+uploads/output snapshots and reject file-bearing shared prefixes there too.
+
 The lightweight harness environment supports validation and regression tests with
-Python 3.11+. Actual evaluation must run in a Python environment with Hermes's
+Python 3.11+. Hermes evaluation must run in a Python environment with Hermes's
 dependencies. `HERMES_AGENT_ROOT` identifies the checkout containing `run_agent.py`;
 it does not select a Python interpreter. The locally tested Hermes environment
 uses Python 3.14; avoid hard-coding an installation path.
@@ -142,7 +157,7 @@ Named CLI profiles support Cohere Command A+ and Baseten Muse Spark Open. Basete
 uses `BASETEN_API_KEY`, with `BASETEN_KEY` and `BAESTEN_KEY` accepted as aliases.
 Both use the same capture, redaction and diagnostic continuation lifecycle.
 
-Import project helpers as **`src.utils`**, never bare `utils`: Hermes has its own
+Import project helpers as **`src.evaluation.utils`**, never bare `utils`: Hermes has its own
 top-level module with that name. Keep Hermes imports lazy so `--validate-only`,
 `--help`, and unit tests work without installing Hermes or contacting a server.
 
@@ -171,10 +186,11 @@ The runner records each selected source file's hash and a canonical suite-conten
 hash. The schema hash and runner hash also appear in the report. Historical reports
 are not rescored automatically when definitions change.
 
-## Shared execution lifecycle and V1 presentation
+## Shared execution lifecycle
 
-`main()` creates a unique run ID, output location, and workspace parent. Each
-scenario executes through `run_single_scenario()`; `_run_turn()` handles one turn.
+The campaign CLI creates a unique output directory and freezes source before
+starting fresh phase workers. Hermes phases use `run_single_scenario()` and
+`_run_turn()` in `src/evaluation/hermes_runner.py`; native phases use the container worker.
 
 1. Create a fresh scenario workspace and bind Hermes's logical cwd and task-local
    terminal backend to it. The task identity remains stable across turns.
@@ -182,9 +198,8 @@ scenario executes through `run_single_scenario()`; `_run_turn()` handles one tur
    file/terminal tools and mocks have both schemas and registered handlers.
 3. Begin with empty conversation history. Before each turn, apply its listed
    perturbations in order.
-4. V1 sends the expanded prompt with a correlation prefix:
-   `[EVAL run=<run-id> scenario=<id> turn=<number>]`. V2 sends the authored prompt
-   without that prefix and retains correlation privately in API/turn evidence.
+4. Send the authored prompt without evaluation markers. Correlation remains
+   private in API and turn evidence; task identities are opaque.
 5. Let Hermes run the conversation and tools. Capture tool execution and API
    exchanges while they happen, before history compaction can remove evidence.
 6. Extract this turn's structured calls, evaluate all three check groups, and
@@ -203,8 +218,8 @@ scenario executes through `run_single_scenario()`; `_run_turn()` handles one tur
    errors stop the suite.
 9. Close the agent and restore workspace bindings, registry/cache state, and
    permissions. Attempt independent cleanup operations even if one fails.
-10. Save final filesystem evidence, then remove only this run's workspace unless
-    `--keep-workspace` is set. Saving evidence must succeed before deletion.
+10. The parent saves final filesystem evidence after its phase worker exits and
+    removes the owned neutral runtime directory. Saved runs are never reused.
 
 History, files, and fault flags persist between turns of the same scenario. They
 do not intentionally carry over to another scenario. Existing run directories
@@ -299,6 +314,13 @@ The mechanism is a framework call, not a `/compact` command sent to the agent.
 
 ## Scoring semantics
 
+Native Docker adapters support optional private `artifact_python` state checks.
+Execute these only through `src/evaluation/artifact_checks.py` on disposable artifact copies;
+never execute authored check or generated artifact code on the host. They do not
+mutate agent state or add model-visible messages/tool calls. Preserve check evidence
+and its separate verification-time metric. See ORCHESTRATOR.md for copy limits;
+Hermes and the host-only oracle probe reject this check explicitly.
+
 Every assertion in every group must pass. An empty group imposes no requirement.
 Checks run after a complete turn, not after each individual tool call.
 
@@ -370,17 +392,15 @@ to a scenario/check as a benchmark change, distinct from implementation cleanup.
 
 ## Bundled scenarios
 
-There are 91 authored scenarios with 157 user turns, ranging from one to five
-turns per scenario. The first 20 retain their IDs but were revised on 2026-10-27:
-setup moved into fixtures, procedural prompts became outcome-oriented requests,
-turn counts changed, and several assertions were strengthened or made less brittle.
-These are benchmark changes; do not compare historical scores without source hashes.
+There are 109 authored scenarios and 192 user turns, including 18 scaled
+workflows. The standalone JSON files are authoritative. The original suite and
+its historical definitions are in the local archive, not a supported CLI mode.
 
 [PROPERTY_CATALOG.md](PROPERTY_CATALOG.md) is the consolidated property index and
 records which proposed concepts have direct, narrower, or deferred coverage.
 The JSON files remain authoritative. Do not duplicate all prompts in this guide.
 
-Scenarios 81–91 adapt distinct teammate probes and matched controls. Scenario 89
+Scenarios 81Ã¢â‚¬â€œ91 adapt distinct teammate probes and matched controls. Scenario 89
 deliberately defers its cumulative service-safety checks until the final turn so
 the model can be questioned about an unsafe earlier action. Its first-turn gate
 establishes retrieval completion only, not safety. The final gate still fails for
@@ -410,9 +430,10 @@ are documented in the property catalog.
 
 ## Evidence and API capture
 
-Every CLI run saves a JSON report plus per-turn `turn_<n>.jsonl` and scenario-level
-`api.jsonl` under `eval_harness/results/runs/<run-id>/traces/<scenario-id>/`.
-The report itself is at `eval_harness/results/runs/<run-id>/eval_report.json`.
+Every campaign saves `eval_harness/runs/<run-id>/report.json`, frozen source,
+per-case phase reports and traces under `repeat_N/`. Each phase retains per-turn
+`turn_<n>.jsonl`, `api.jsonl`, service state and workspace snapshots. Native phase
+layouts and diagnostic paths are referenced by their saved reports.
 
 `api_trace.py` captures synchronous and asynchronous HTTPX POST dispatches ending
 in `/chat/completions` while a scenario is active. This covers rebuilt SDK clients,
@@ -448,29 +469,23 @@ change live requests or scoring inputs. Preserve synthetic task secrets needed t
 understand security scenarios. Do not claim redaction makes traces public: task
 content and unknown sensitive data can still be present.
 
-API evidence is collected for local and hosted runs alike. LM Studio log
-correlation is optional post-processing. It supports explicit markers and legacy
-prompt matching, retaining ambiguity when multiple runs match. It is not an
-Ollama/provider log parser and does not generate the core API evidence.
+API evidence is collected for local and hosted runs alike.
 
 ## Interpreting failures
 
-`src/attribute_failures.py` produces separate, read-only diagnostic artifacts under
-ignored `eval_harness/attribution/`. New scenario reports freeze `scenario_contract`
-for reproducible attribution; it is evaluator-only data and never model input.
-Older contracts must match recorded source hashes before use. Keep model/serving
-output errors, runtime interventions, mock-service enforcement, verifier
-contradictions and transport/provider conditions on separate axes. Finding counts
-are not failure percentages. The current rules are deliberately narrow: absence
-of a finding proves neither correctness nor enforcement, and an executed turn
-does not establish that its intended challenge was reached. Use offline exact-call
-reproduction or explicit property monitors before claiming an uncertain native
-Hermes defect. Do not rewrite historical scores based on these diagnostics.
+Phase reports freeze `scenario_contract` for reproducible attribution; it is
+private evaluator data. `src/evaluation/attribute_failures.py` supplies reusable turn-level
+diagnostic routines; `src/evaluation/analyze.py` and `src/evaluation/audit.py` process current campaigns.
+Keep model/protocol errors, runtime interventions, mock enforcement, verifier
+contradictions and provider failures separate. Finding counts are not failure
+percentages. Missing findings prove neither correctness nor enforcement. Inspect
+whether a challenge was reached and retain causal uncertainty. Historical scores
+must not be rewritten based on post-hoc diagnostics.
 
 Respect the responsibility boundary: application-specific rules are model/workflow
 obligations unless supplied to an enforceable runtime/tool interface. Do not blame
 Hermes for not inferring arbitrary business schemas or transaction boundaries.
-`src/control_observer.py` passively observes selected loaded native file-control
+`src/evaluation/control_observer.py` passively observes selected loaded native file-control
 call sites, including allowed operations, with call IDs, source hashes, hook
 availability and environment switches. It preserves original decisions/exceptions
 and restores wrappers; no installed Hermes files are changed. Capture errors fail
@@ -503,7 +518,7 @@ These are standing presentation requirements for future exports, not changes to
 evaluation execution or raw evidence:
 
 - Start transcripts containing native-control observations with a glossary of
-  each check and its possible result meanings. Use `src/transcript_formatting.py`
+  each check and its possible result meanings. Use `src/evaluation/transcript_formatting.py`
   for the glossary and check tables. Measurements and explanatory messages are
   not categorical pass/fail outcomes. Preserve unknown results without guessing.
 - Render contiguous native checks for the same tool call as table rows, preserving
@@ -540,7 +555,7 @@ offline development checks are:
 
 ```sh
 uv sync --locked
-uv run --locked python src/eval_runner.py --validate-only
+uv run --locked python src/evaluation/evaluate.py --validate-only
 uv run --locked python -m unittest discover -s tests -v
 uv run --locked ruff check --no-cache src tests
 uv run --locked ruff format --no-cache --check src tests
@@ -549,7 +564,7 @@ uv run --locked ruff format --no-cache --check src tests
 After preparing the Hermes environment as described in the README:
 
 ```sh
-uv run --active --no-sync python src/check_hermes_integration.py
+uv run --active --no-sync python src/evaluation/check_hermes_integration.py
 ```
 
 That integration command exercises registry restoration, real relative
@@ -574,8 +589,8 @@ configured import order, modern Python annotations, and formatting.
   `--workspace-root` paths are not automatically covered by ignore rules.
 - Never delete previous runs as incidental cleanup. Workspace deletion must target
   only the current run after saved evidence, with path/link checks intact.
-  Save `final_run_workspace` for the whole run root before deletion, in addition to
-  per-scenario snapshots, so misplaced outputs are retained in the report.
+  Save phase workspace evidence before runtime deletion and preserve auxiliary
+  native files so misplaced outputs remain available for review.
 - Workspace snapshots tag entries with `kind: file` or `kind: directory`, including
   empty directories and `.` for an existing root. File entries retain hashes, byte
   counts and UTF-8 text up to 1 MB. Readers must distinguish directory entries from

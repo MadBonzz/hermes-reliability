@@ -2,7 +2,7 @@ import os
 import unittest
 from types import SimpleNamespace
 
-from src.perturbations import apply_perturbations
+from src.evaluation.perturbations import apply_perturbations
 from tests.helpers import TemporaryDirectoryTestCase
 
 

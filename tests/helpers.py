@@ -5,8 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src import utils
-from src.mock_registry import DynamicMockToolManager
+from src.evaluation import utils
+from src.evaluation.mock_registry import DynamicMockToolManager
 
 
 class FakeRegistry:
@@ -36,6 +36,17 @@ def mock(name="mock"):
 def scenario(name="sample", mocks=None):
     return {
         "id": name,
+        "benchmark_version": 2,
+        "complexity": {
+            "family": "integrity",
+            "turns": 1,
+            "input_files": 0,
+            "services": 0,
+            "records": 0,
+            "dependency_depth": 1,
+            "fault_types": [],
+            "interaction": "artifact_edit",
+        },
         "name": name,
         "property_tested": "test",
         "mock_tools": mocks or [],

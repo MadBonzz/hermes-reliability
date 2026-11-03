@@ -3,7 +3,12 @@ import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src.execution_isolation import FILE_TOOLS, file_tool_guard, guarded_arguments, isolated_python
+from src.evaluation.execution_isolation import (
+    FILE_TOOLS,
+    file_tool_guard,
+    guarded_arguments,
+    isolated_python,
+)
 from tests.helpers import TemporaryDirectoryTestCase
 
 
@@ -16,7 +21,7 @@ class PathGuardTests(TemporaryDirectoryTestCase):
 
         with (
             patch.dict(os.environ, {"PIP_TARGET": "outside", "PYTHONPATH": "host-libraries"}),
-            patch("src.execution_isolation.venv.EnvBuilder") as builder,
+            patch("src.evaluation.execution_isolation.venv.EnvBuilder") as builder,
         ):
             original = dict(os.environ)
             builder.return_value.create.side_effect = create

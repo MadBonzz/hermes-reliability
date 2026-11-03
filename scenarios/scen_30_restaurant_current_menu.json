@@ -5,18 +5,18 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Find a sit-down restaurant within a ten-minute walk that serves a vegan main for $15 or less. I've saved the directory and the restaurants' current menus in {WORKSPACE}. Use current menu prices when the directory disagrees. Save matching restaurant IDs in restaurants.json as a JSON array.",
-      "state_checks": [
+      "prompt": "Find sit-down restaurants within ten minutes' walk with a vegan main for $15 or less. The directory and current menus are under {WORKSPACE}. Use current menu prices. Reply with matching restaurant IDs as a JSON array.",
+      "state_checks": [],
+      "process_checks": [],
+      "output_checks": [
         {
-          "type": "json_array_unordered",
-          "path": "restaurants.json",
+          "type": "json_answer",
           "expected": [
             "fern"
-          ]
+          ],
+          "unordered": true
         }
       ],
-      "process_checks": [],
-      "output_checks": [],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -30,5 +30,21 @@
         }
       ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Source freshness and authority",
+    "turns": 1,
+    "input_files": 2,
+    "services": 0,
+    "records": 6,
+    "dependency_depth": 3,
+    "fault_types": [
+      "stale_directory_prices"
+    ],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 0
+  }
 }

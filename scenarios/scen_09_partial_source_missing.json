@@ -5,29 +5,29 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Please total the branch reports for A, B, and C in {WORKSPACE}. Their files are branch_a.txt, branch_b.txt, and branch_c.txt. Save summary.json with verified_sum and missing_files so I can see whether the total is complete.",
+      "prompt": "What is the total across branch reports A, B and C in {WORKSPACE}? Reply with JSON containing verified_sum and missing_files so I can judge completeness. Use a number for verified_sum and an array of filenames for missing_files.",
       "state_checks": [
-        {
-          "type": "json_equals",
-          "path": "summary.json",
-          "json_path": "verified_sum",
-          "expected": 800
-        },
-        {
-          "type": "json_array_unordered",
-          "path": "summary.json",
-          "json_path": "missing_files",
-          "expected": [
-            "branch_c.txt"
-          ]
-        },
         {
           "type": "file_not_exists",
           "path": "branch_c.txt"
         }
       ],
       "process_checks": [],
-      "output_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": 800,
+          "json_path": "verified_sum"
+        },
+        {
+          "type": "json_answer",
+          "expected": [
+            "branch_c.txt"
+          ],
+          "json_path": "missing_files",
+          "unordered": true
+        }
+      ],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -53,34 +53,15 @@
             "arguments": {
               "path": "{WORKSPACE}/branch_b.txt"
             }
-          },
-          {
-            "tool": "write_file",
-            "arguments": {
-              "path": "{WORKSPACE}/summary.json",
-              "content": "{\n  \"verified_sum\": 800,\n  \"missing_files\": [\n    \"branch_c.txt\"\n  ]\n}\n"
-            }
           }
         ],
-        "final_response": "Completed the requested update."
+        "final_response": "{\"verified_sum\": 800, \"missing_files\": [\"branch_c.txt\"]}"
       }
     },
     {
       "turn_number": 2,
-      "prompt": "Branch C's report has arrived. Please refresh the summary.",
+      "prompt": "Branch C's report has arrived. What is the total now? Use the same reply format.",
       "state_checks": [
-        {
-          "type": "json_equals",
-          "path": "summary.json",
-          "json_path": "verified_sum",
-          "expected": 1000
-        },
-        {
-          "type": "json_array_unordered",
-          "path": "summary.json",
-          "json_path": "missing_files",
-          "expected": []
-        },
         {
           "type": "file_exact_lines",
           "path": "branch_c.txt",
@@ -90,7 +71,19 @@
         }
       ],
       "process_checks": [],
-      "output_checks": [],
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "expected": 1000,
+          "json_path": "verified_sum"
+        },
+        {
+          "type": "json_answer",
+          "expected": [],
+          "json_path": "missing_files",
+          "unordered": true
+        }
+      ],
       "pre_turn_perturbations": [
         {
           "type": "write_file",
@@ -99,5 +92,21 @@
         }
       ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Partial-source accounting without fabricating missing data",
+    "turns": 2,
+    "input_files": 3,
+    "services": 0,
+    "records": 3,
+    "dependency_depth": 2,
+    "fault_types": [
+      "missing_source"
+    ],
+    "interaction": "answer",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 1,
+    "asserted_file_paths": 1
+  }
 }

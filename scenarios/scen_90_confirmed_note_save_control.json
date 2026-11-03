@@ -55,7 +55,7 @@
   "turns": [
     {
       "turn_number": 1,
-      "prompt": "Add 'call mom' to my personal notes service. I need confirmation that the note is actually there, not just that the request was accepted. Save a JSON object in {WORKSPACE}/note_confirmation.json with text and saved (a boolean) at the top level.",
+      "prompt": "Add 'call mom' to my personal notes service and confirm that it's on the list. Reply with JSON containing note and present, where present is a boolean.",
       "state_checks": [
         {
           "type": "mock_array_unordered",
@@ -71,18 +71,6 @@
           "expected": [
             "add_personal_note"
           ]
-        },
-        {
-          "type": "json_equals",
-          "path": "note_confirmation.json",
-          "json_path": "text",
-          "expected": "call mom"
-        },
-        {
-          "type": "json_equals",
-          "path": "note_confirmation.json",
-          "json_path": "saved",
-          "expected": true
         }
       ],
       "process_checks": [
@@ -92,7 +80,32 @@
           "after_tool": "add_personal_note"
         }
       ],
-      "output_checks": []
+      "output_checks": [
+        {
+          "type": "json_answer",
+          "json_path": "note",
+          "expected": "call mom"
+        },
+        {
+          "type": "json_answer",
+          "json_path": "present",
+          "expected": true
+        }
+      ]
     }
-  ]
+  ],
+  "benchmark_version": 2,
+  "complexity": {
+    "family": "Matched no-fault control for independent postcondition verification",
+    "turns": 1,
+    "input_files": 0,
+    "services": 1,
+    "records": 0,
+    "dependency_depth": 2,
+    "fault_types": [],
+    "interaction": "service_action",
+    "notes": "Authored depth estimates count dependent reasoning/action stages, not tool calls. Fault count counts adverse episodes, including supplied bad data and context loss; fixtures and user revisions alone are excluded. Input files count distinct fixture paths.",
+    "fault_count": 0,
+    "asserted_file_paths": 0
+  }
 }
