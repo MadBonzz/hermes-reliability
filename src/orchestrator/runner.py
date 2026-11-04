@@ -15,6 +15,8 @@ import httpx
 
 from src.evaluation.api_trace import SecretRedactor
 from src.evaluation.audit import audit_campaign
+from src.evaluation.differential import compare as differential_compare
+from src.evaluation.differential import markdown as differential_markdown
 from src.evaluation.evaluation_metrics import api_metrics
 from src.evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
 from src.evaluation.utils import load_eval_config
@@ -31,6 +33,8 @@ from src.orchestrator.prompts import (
     SMOKE_SCOPE,
     SOURCE_READ_HINT,
     VARIANTS,
+    VERSION_ANALYSIS_GUIDANCE,
+    VERSION_GENERATION_GUIDANCE,
     contract_error,
     parse_error,
     review_task,
@@ -43,7 +47,10 @@ from src.orchestrator.quality import (
     validate_proposal,
     validate_review,
     validate_stopping,
+    validate_version_plan,
 )
+from src.orchestrator.regression_index import lookup as index_lookup
+from src.orchestrator.regression_index import record as index_record
 from src.orchestrator.transcripts import export_execution
 from src.orchestrator.workspace import Workspace
 
@@ -497,6 +504,124 @@ def prepare_source(config, output):
     return source
 
 
+def _checkout(repository, revision, path):
+    """Clone (if needed) and verify a clean detached checkout of one revision."""
+    path = Path(path).resolve()
+    if not path.exists():
+        subprocess.run(["git", "clone", "--depth", "1", repository, str(path)], check=True)
+        subprocess.run(["git", "-C", str(path), "fetch", "origin", revision], check=True)
+        subprocess.run(["git", "-C", str(path), "checkout", "--detach", revision], check=True)
+
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
+
+    if git("rev-parse", "HEAD") != revision:
+        raise ValueError(f"Agent revision mismatch at {path}: expected {revision}")
+    if git("remote", "get-url", "origin").removesuffix(".git") != repository.removesuffix(".git"):
+        raise ValueError("Agent repository remote does not match configuration")
+    if git("status", "--porcelain", "--untracked-files=no"):
+        raise ValueError(f"Agent source at {path} contains tracked modifications")
+    return path
+
+
+def prepare_version_change(config, output, source):
+    """Check out the base revision and record what changed between base and target.
+
+    Writes version_change.json (changed files, diff stat, commit log) and
+    version_change.diff (the full diff) for the main agent to read as evidence.
+    """
+    source_config = config["source"]
+    repository = source_config["repository"]
+    base, target = source_config["base_revision"], source_config["revision"]
+    if base == target:
+        raise ValueError("base_revision must differ from revision")
+    base_source = _checkout(
+        repository, base, source_config.get("base_local_path", output / "agent_source_base")
+    )
+
+    def git(*args, check=True):
+        result = subprocess.run(
+            ["git", "-C", str(source), *args], capture_output=True, text=True, check=False
+        )
+        if check and result.returncode:
+            raise ValueError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+        return result
+
+    if git("cat-file", "-e", f"{base}^{{commit}}", check=False).returncode:
+        git("fetch", "origin", base)  # make the base tree available for diffing
+    changed = git("diff", "--name-only", base, target).stdout.split()
+    if not changed:
+        raise ValueError("No file changes between base_revision and revision")
+    diff = git("diff", base, target).stdout
+    log = git("log", "--oneline", f"{base}..{target}", check=False)
+    summary = {
+        "repository": repository,
+        "base_revision": base,
+        "target_revision": target,
+        "changed_files": changed,
+        "diff_stat": git("diff", "--stat", base, target).stdout,
+        "commit_log": log.stdout if log.returncode == 0 else None,
+        "commit_log_note": None
+        if log.returncode == 0
+        else "Commit history unavailable (shallow clone); use base_local_path/local_path with full history.",
+        "diff_characters": len(diff),
+    }
+    save(output / "version_change.json", summary)
+    (output / "version_change.diff").write_text(diff, encoding="utf-8")
+    return base_source, summary
+
+
+def _load_report(path):
+    path = Path(path)
+    if not path.exists():
+        return None
+    report = json.loads(path.read_text(encoding="utf-8"))
+    return report if "cases" in report else None
+
+
+def _index_lane(index_path, report_path, revision, **details):
+    """Register an original-evaluator lane in the results index (complete reports only)."""
+    if _load_report(report_path) is None:
+        return None
+    return index_record(index_path, revision, report_path, kind="orchestrator_lane", **details)
+
+
+def _version_differential(directory, plan, record, change, evidence):
+    """Compare base_version (old framework) with trusted (new framework) for one round."""
+    base = _load_report(directory / "base_version/execution/report.json")
+    target = _load_report(directory / "trusted/execution/report.json")
+    if base is None or target is None:
+        missing = [
+            lane for lane, report in (("base_version", base), ("trusted", target)) if report is None
+        ]
+        return {"available": False, "missing_complete_reports": missing}
+    rows = {row.get("id"): row for row in plan.get("rationale", []) if isinstance(row, dict)}
+    layers = {sid: row.get("property_layer", "unlabelled") for sid, row in rows.items()}
+    result = differential_compare(base, target, layers)
+    for row in result["table"]:
+        rationale = rows.get(row["id"], {})
+        row["change_target"] = rationale.get("change_target")
+        row["predicted_outcome"] = rationale.get("predicted_outcome")
+    result.update(
+        available=True,
+        base_revision=change["base_revision"],
+        target_revision=change["target_revision"],
+        comparison="base_version lane vs trusted lane: same scenarios and original evaluator",
+    )
+    save(directory / "version_differential.json", result)
+    (directory / "version_differential.md").write_text(
+        differential_markdown(
+            result,
+            baseline_label=f"base {change['base_revision'][:10]}",
+            candidate_label=f"target {change['target_revision'][:10]}",
+        ),
+        encoding="utf-8",
+    )
+    result["evidence_id"] = evidence.add(directory / "version_differential.json")
+    record["version_differential"] = str(directory / "version_differential.json")
+    return result
+
+
 def api_usage(directory):
     totals = {"input_tokens": 0, "output_tokens": 0}
     by_role = {}
@@ -903,6 +1028,42 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
         if limits["initial_tests"] > limits["active_tests"]:
             raise ValueError("Initial tests exceed active test cap")
         source = prepare_source(config, output)
+        version_mode = bool(config["source"].get("base_revision"))
+        version_request, base_adapter, change = None, None, None
+        index_path = Path(
+            config.get("regression_index", ROOT / "eval_harness/regression_index.json")
+        )
+        if version_mode:
+            if config.get("adapter", {}).get("kind", "hermes") != "hermes":
+                raise ValueError("Version regression mode currently supports Hermes only")
+            base_source, change = prepare_version_change(config, output, source)
+            prior_results = index_lookup(index_path, change["base_revision"])
+            save(
+                output / "prior_results.json",
+                {"base_revision": change["base_revision"], "entries": prior_results},
+            )
+            version_request = {
+                "base_revision": change["base_revision"],
+                "target_revision": change["target_revision"],
+                "changed_files": change["changed_files"],
+                "change_summary_evidence_id": evidence.add(output / "version_change.json"),
+                "diff_evidence_id": evidence.add(output / "version_change.diff"),
+                "prior_results_evidence_id": evidence.add(output / "prior_results.json"),
+                "prior_result_count": len(prior_results),
+                "guidance": VERSION_GENERATION_GUIDANCE,
+            }
+            state["version_change"] = {
+                k: version_request[k]
+                for k in ("base_revision", "target_revision", "changed_files", "prior_result_count")
+            }
+            base_adapter = adapter_factory(
+                {
+                    **config["adapter"],
+                    "hermes_root": str(base_source),
+                    "source_revision": change["base_revision"],
+                    "target": config["target"],
+                }
+            )
         resumed = review_recovery(config, evidence)
         recovery = initial_recovery(config, evidence) if not resumed else None
         source_id = (
@@ -1025,6 +1186,7 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                         if hasattr(adapter, "describe")
                         else {"framework": config["adapter"].get("kind", "custom")},
                         "campaign_recovery": state.get("recovery"),
+                        "version_change": version_request,
                         "review_feedback": feedback,
                         "previous_analysis": previous,
                         "prior_rounds": [
@@ -1046,6 +1208,9 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                         validate_proposal(value, evidence, source),
                         validate_design(value, workspace.validate(limit))
                         if variant != "baseline"
+                        else None,
+                        validate_version_plan(value, change["changed_files"])
+                        if version_mode
                         else None,
                     ),
                 )
@@ -1182,8 +1347,13 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
             if not execute:
                 state["stop_reason"] = "generated_only"
                 break
-            # Both lanes receive byte-identical scenario files and separate evaluator copies.
-            for lane, evaluator in (("candidate", candidate), ("trusted", trusted.root)):
+            # All lanes receive byte-identical scenario files and separate evaluator copies.
+            # In version mode the base_version lane reruns the original evaluator against the
+            # base framework revision, so trusted vs base_version isolates the framework change.
+            lanes = [("candidate", candidate, adapter), ("trusted", trusted.root, adapter)]
+            if version_mode:
+                lanes.append(("base_version", trusted.root, base_adapter))
+            for lane, evaluator, lane_adapter in lanes:
                 progress("execution", round=index, lane=lane)
                 print(
                     f"Round {index}, executing {len(cases)} tests with {lane} evaluator", flush=True
@@ -1196,7 +1366,7 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                     ignore=shutil.ignore_patterns("__pycache__", "scenarios"),
                 )
                 shutil.copytree(candidate / "scenarios", lane_root / "evaluator/scenarios")
-                result = adapter.execute_revision(
+                result = lane_adapter.execute_revision(
                     lane_root / "evaluator", lane_root / "execution", config["target"], target_key
                 )
                 report_path = lane_root / "execution/report.json"
@@ -1216,6 +1386,18 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 record["executions"][lane] = result
                 print(f"{lane}: {result['status']}", flush=True)
                 save(lane_root / "execution_result.json", result)
+                if version_mode and lane in {"trusted", "base_version"}:
+                    _index_lane(
+                        index_path,
+                        report_path,
+                        change["target_revision" if lane == "trusted" else "base_revision"],
+                        lane=lane,
+                        campaign=str(output),
+                        round=index,
+                    )
+            differential = None
+            if version_mode:
+                differential = _version_differential(directory, plan, record, change, evidence)
             transcript_ids = []
             raw_ids = []
             for lane in record["executions"]:
@@ -1266,6 +1448,11 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                     "campaign_recovery": state.get("recovery"),
                     "raw_evidence": {eid: evidence.items[eid] for eid in raw_ids},
                     "review_findings": record["unresolved_review_findings"],
+                    "version_change": version_request,
+                    "version_differential": differential,
+                    "version_analysis_guidance": VERSION_ANALYSIS_GUIDANCE
+                    if version_mode
+                    else None,
                 },
                 workspace=workspace,
                 readonly=True,

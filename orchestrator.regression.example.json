@@ -1,0 +1,33 @@
+{
+  "scope": "Detect behavioural changes between two Hermes revisions: test properties the diff could strengthen or break, label each test as framework- or task-layer, and predict outcomes on both revisions before execution.",
+  "source": {
+    "repository": "https://github.com/NousResearch/hermes-agent.git",
+    "revision": "TARGET_COMMIT_SHA",
+    "base_revision": "BASE_COMMIT_SHA_OLDER_THAN_REVISION"
+  },
+  "orchestrator": {
+    "base_url": "https://inference.baseten.co/v1",
+    "model": "meta-models/muse-spark-open-1026",
+    "api_key_env": "BAESTEN_KEY",
+    "timeout_seconds": 180,
+    "read_timeout_seconds": null
+  },
+  "target": {
+    "base_url": "https://api.cohere.ai/compatibility/v1",
+    "model": "command-a-03-2025",
+    "api_key_env": "COHERE_KEY"
+  },
+  "adapter": {
+    "kind": "hermes",
+    "python": "PATH_TO_HERMES_ENVIRONMENT_PYTHON",
+    "max_iterations": 15,
+    "request_interval": 7
+  },
+  "limits": {
+    "rounds": 3,
+    "initial_tests": 5,
+    "active_tests": 12,
+    "generations": 3
+  },
+  "prompt_variant": "evidence_first_v1"
+}
