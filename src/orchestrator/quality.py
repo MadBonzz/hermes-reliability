@@ -211,3 +211,36 @@ def validate_proposal(plan, evidence, source):
             raise ValueError(
                 f"Use exact inspected source refs. Available refs: {sorted(source_refs)}"
             )
+
+
+def validate_version_plan(plan, changed_files):
+    """Version mode: every test names its change target, property layer and predictions."""
+    from src.orchestrator.prompts import PREDICTED_OUTCOMES, PROPERTY_LAYERS
+
+    rows = plan.get("rationale")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Version mode needs a rationale row for every active test")
+    changed = set(changed_files)
+    targeted = 0
+    for row in rows:
+        label = row.get("id", "<missing id>")
+        target = row.get("change_target")
+        if target != "control" and target not in changed:
+            raise ValueError(
+                f"{label}: change_target must be a path from version_change.changed_files "
+                "or 'control'"
+            )
+        targeted += target != "control"
+        if row.get("property_layer") not in PROPERTY_LAYERS:
+            raise ValueError(f"{label}: property_layer must be one of {list(PROPERTY_LAYERS)}")
+        prediction = row.get("predicted_outcome")
+        if not isinstance(prediction, dict) or any(
+            prediction.get(side) not in PREDICTED_OUTCOMES for side in ("base", "target")
+        ):
+            raise ValueError(
+                f"{label}: predicted_outcome needs base and target, each one of "
+                f"{list(PREDICTED_OUTCOMES)}"
+            )
+        _text(prediction.get("reason"), f"{label} predicted_outcome reason")
+    if not targeted:
+        raise ValueError("At least one test must target a changed file, not only controls")

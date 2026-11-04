@@ -398,6 +398,45 @@ workspaces contain `src/evaluation/` and its package initializer, not the
 orchestrator. Editable Python paths are `src/evaluation/*.py` and `tests/*.py`.
 Revision hashes and source snapshots include nested evaluation modules.
 
+## Version regression mode
+
+Setting `source.base_revision` turns a campaign into a differential regression test between
+two revisions of the same framework (Hermes only for now). `source.revision` is the new
+(target) revision; `base_revision` is the previously deployed one. See
+[orchestrator.regression.example.json](orchestrator.regression.example.json).
+
+1. The base revision is checked out separately (`source.base_local_path`, default
+   `agent_source_base/` in the attempt). Both checkouts must be clean and match the
+   configured repository. `version_change.json` records the changed files, diff stat and
+   commit log; `version_change.diff` holds the full diff. A shallow clone cannot list the
+   intervening commits; point `source.local_path` at a full clone to include them.
+2. The main agent receives `version_change` (revisions, changed files and evidence IDs for
+   the summary, the diff and `prior_results.json`). `prior_results.json` lists results
+   already recorded for the base revision in the results index.
+3. Every rationale row must name `change_target` (a changed path, or `control`),
+   `property_layer` (`framework`, `task` or `mixed`) and `predicted_outcome` (`base` and
+   `target`, each `pass`, `fail` or `uncertain`, with a reason) before execution. At least
+   one test must target a changed file. Predictions are recorded hypotheses, not oracles.
+4. Execution adds a third lane, `base_version`: the same scenarios and the frozen original
+   evaluator against the base checkout. `trusted` versus `base_version` therefore differs
+   only in the framework revision (and in sampled trajectories).
+5. `round_NNN/version_differential.json` and `.md` classify each test as improved,
+   unchanged or regressed from base to target, summarised by property layer, with the
+   recorded predictions alongside. The analysis receives this table and is asked to check
+   transcripts before attributing a difference to the diff rather than to sampling.
+
+The `trusted` and `base_version` lane reports are registered in the results index
+(`regression_index`, default `eval_harness/regression_index.json`) under their revisions.
+Ordinary benchmark runs can be added with
+`uv run --locked python -m src.orchestrator.regression_index scan eval_harness/runs`,
+which reads the Hermes commit recorded in each report. Any two runs of the same scenarios
+can be compared directly with `src/evaluation/differential.py BASE/report.json NEW/report.json`.
+
+Version mode adds one full target execution per round. An older base revision may not
+load with the current harness or lack hooks it uses; its lane preflight then fails and the
+lane is reported as invalid rather than as a target failure. Single repetitions per lane
+make one changed outcome weak evidence of a framework effect.
+
 ## Prompt improvement experiments
 
 `prompt_variant` selects `baseline`, `evidence_first_v1`, `counterexample_first_v1`,
