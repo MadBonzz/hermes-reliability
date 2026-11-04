@@ -37,7 +37,7 @@ def execute(config):
         isolated_python(root) as python_environment,
         utils.hermes_run_environment(root / "profile"),
     ):
-        utils.load_hermes(config.get("hermes_root"))
+        utils.load_hermes(config.get("hermes_root"), approval=config.get("hermes_approval", "auto"))
         os.environ.pop("HERMES_AGENT_ROOT", None)
         report = run_single_scenario(
             spec,

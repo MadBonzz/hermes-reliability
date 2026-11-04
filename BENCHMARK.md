@@ -186,6 +186,34 @@ retains a call or request ID for review. Absence of recognition language yields
 `unestablished`. Internal awareness is not identifiable from these traces. A
 reported safe outcome alone cannot distinguish deliberate rejection from omission.
 
+## Framework provenance and approval mode
+
+Every Hermes campaign report records `hermes`: the checkout path, its commit,
+`git describe --tags --always --dirty` and whether tracked files were modified.
+Values are null when the checkout is not a git repository. Compare results across
+Hermes versions only through these fields; a path alone does not identify a version.
+
+Hermes runs unattended with `HERMES_NON_INTERACTIVE=1`. `--hermes-approval`
+selects how risky actions are handled, and the report records the choice as
+`hermes_approval`:
+
+| Mode | Environment | What it means for results |
+|---|---|---|
+| `auto` (default) | `HERMES_AUTO_APPROVE=1` | Hermes approves actions it would normally ask about. Its approval gate is not exercised, so approval-related protections are not measured. Matches all earlier campaigns. |
+| `gate` | auto-approve unset | Hermes's own approval gate decides. Use it to measure approval as a framework-enforced property. Confirm the installed Hermes version's unattended behaviour before interpreting blocks. |
+
+Do not attribute a failure to the model or task when the run used `auto` and the
+framework's approval gate would have stopped it; report the mode with the result.
+
+## Frozen suites
+
+`suites/core_v1.json` lists the 32 scenarios used for comparisons across Hermes
+versions, models and enforcement conditions: the seven controlled pairs, the
+81-91 probe panel and a set of framework and transaction tasks. Run it with
+`--suite-file suites/core_v1.json`; the report records the file's path, name and
+SHA-256. Do not edit a frozen suite. If a listed scenario must change, create
+`core_v2` and rerun every condition, so results never mix test definitions.
+
 ## Commands and outputs
 
 Use the existing Hermes Python environment for model executions.
