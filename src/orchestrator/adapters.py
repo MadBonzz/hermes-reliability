@@ -110,6 +110,8 @@ class HermesAdapter:
             str(self.config.get("max_iterations", 15)),
             "--request-interval",
             str(self.config.get("request_interval", 0)),
+            "--hermes-approval",
+            self.config.get("hermes_approval", "auto"),
         ]
 
     def execute_revision(self, evaluator, output, target, key):

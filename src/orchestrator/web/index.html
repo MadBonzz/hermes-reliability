@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="session-token" content="__SESSION_TOKEN__">
+  <title>Agent Reliability Lab</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Agent Reliability Lab home"><span class="brand-icon">a/r</span><span>Agent Reliability<span class="brand-sub">LAB</span></span></a>
+    <div class="side-label">EXPERIMENTS</div>
+    <button class="primary" id="new-campaign">＋ New campaign</button>
+    <div id="campaign-list" class="campaign-list"></div>
+    <div class="side-footer"><span class="live-dot"></span> Local workspace<br><span>Run artifacts saved locally</span></div>
+  </aside>
+  <main>
+    <header class="topbar"><span>WORKSPACE <span class="slash">/</span> <strong>Reliability experiments</strong></span><span id="connection" role="status">Connecting…</span></header>
+    <div id="banner" role="status" hidden></div>
+    <section id="welcome" class="welcome">
+      <span class="eyebrow">FROM SOURCE CODE TO EVIDENCE</span>
+      <h1>Find where your<br>agent breaks.</h1>
+      <p>Generate realistic tasks, challenge them with independent reviewers, and watch your agent handle failures. Follow every iteration from source inspection to causal analysis.</p>
+      <button class="primary" id="welcome-start">Start an experiment ↗</button>
+      <div class="intro-grid"><article><b>01 / Understand</b><p>Inspect the agent’s source and identify the properties its workflows depend on.</p></article><article><b>02 / Challenge</b><p>Generate tasks, review their contracts, and introduce controlled faults.</p></article><article><b>03 / Learn</b><p>Compare outcomes, trace contributing failures, and refine the next test set.</p></article></div>
+    </section>
+    <section id="campaign" hidden>
+      <div class="campaign-header"><div><span class="eyebrow" id="campaign-repository"></span><h1 id="campaign-title"></h1><p id="campaign-models"></p></div><button id="stop" class="secondary danger">Stop at next boundary</button></div>
+      <div id="phase-strip" class="phase-strip"></div>
+      <div id="stats" class="stats"></div>
+      <div class="content-grid">
+        <section class="panel activity-panel"><div class="panel-heading"><h2>Live activity</h2><span id="activity-status" class="badge"></span></div><p id="phase-description" class="muted"></p><div id="activity" class="activity"></div></section>
+        <section class="panel"><div class="panel-heading"><h2>Iteration history</h2><span class="muted">Independent evaluator runs</span></div><div id="iterations"></div></section>
+      </div>
+      <section class="section"><div class="panel-heading"><div><span class="eyebrow">THE ACTIVE TEST SET</span><h2>Generated scenarios</h2></div><span id="test-count" class="badge"></span></div><div id="test-grid" class="test-grid"></div></section>
+      <section class="section"><div class="panel-heading"><h2>Review &amp; findings</h2><select id="round-select" aria-label="Round to inspect"></select></div><div id="reviews" class="review-grid"></div><div id="earlier-reviews"></div></section>
+      <section class="section"><div class="panel-heading"><h2>Causal findings</h2><span id="findings-count" class="badge"></span></div><div id="analysis" class="analysis"></div></section>
+      <footer id="evidence-path"></footer>
+    </section>
+  </main>
+  <dialog id="setup"><form id="setup-form">
+    <div class="dialog-heading"><div><span class="eyebrow">NEW EXPERIMENT</span><h2>Connect an agent</h2></div><button type="button" class="icon-button close-dialog" aria-label="Close">×</button></div>
+    <p class="muted">Choose a supported runtime and its source. The campaign inspects the pinned code before proposing tests.</p>
+    <div class="form-row"><label>Runtime<select id="runtime"><option value="hermes">Hermes</option><option value="openhands">OpenHands</option><option value="deerflow">DeerFlow</option></select></label><label>Revision <span class="optional">optional</span><input id="revision" placeholder="Default branch, or native image revision"></label></div>
+    <label>Repository URL or local Git checkout<input id="source" required placeholder="https://github.com/NousResearch/hermes-agent.git"></label>
+    <label>Earlier campaign<select id="prior"><option value="">Start a new test suite</option></select><span class="hint">Reuse earlier scenarios. For a changed Hermes revision, the campaign also runs the base version.</span></label>
+    <div class="model-summary"><div><span>ORCHESTRATOR + 3 REVIEWERS</span><b id="orch-summary">muse-wonder-1.0</b></div><span class="model-arrow">→</span><div><span>AGENT UNDER TEST</span><b id="target-summary">muse-spark-1.3-contributor</b></div></div>
+    <p id="credentials" class="hint"></p>
+    <div class="form-row"><label>Runtime Python<input id="python" required placeholder="Python executable with runtime dependencies"></label><label id="image-label" hidden>Native Docker image<input id="runtime-image" placeholder="agent-eval-openhands:COMMIT"></label></div>
+    <details><summary>Models, budgets &amp; comparison settings</summary>
+      <div class="form-row"><label>Orchestrator API root<input id="orch-url" value="https://api.meta.ai/v1" required></label><label>Orchestrator model<input id="orch-model" value="muse-wonder-1.0" required></label></div>
+      <label>Orchestrator credential variable<input id="orch-key" value="META_KEY" required></label>
+      <div class="form-row"><label>Target API root<input id="target-url" value="https://api.meta.ai/v1" required></label><label>Target model<input id="target-model" value="muse-spark-1.3-contributor" required></label></div>
+      <label>Target credential variable<input id="target-key" value="META_KEY" required><span class="hint">For a local server, enter its /v1 URL and exact model ID. Set a placeholder key in .env if required.</span></label>
+      <div class="form-row"><label>Execution rounds<input id="rounds" type="number" min="1" max="5" value="3"></label><label>Generations per round<input id="generations" type="number" min="1" max="3" value="3"></label></div>
+      <div class="form-row"><label>Initial tests<input id="initial-tests" type="number" min="1" max="5" value="5"></label><label>Maximum active tests<input id="active-tests" type="number" min="1" max="12" value="12"></label></div>
+      <div class="form-row"><label>Base revision <span class="optional">Hermes only</span><input id="base-revision" placeholder="Optional older commit for comparison"></label><label>Hermes approval mode<select id="approval"><option value="auto">Auto approve</option><option value="gate">Native approval gate</option></select></label></div>
+      <label>Exploration scope<textarea id="scope" rows="3">Explore software and distributed-system properties using realistic workflows, meaningful controlled comparisons and varied dependency complexity.</textarea></label>
+    </details>
+    <label class="checkbox"><input type="checkbox" id="execute" checked> Execute generated tests after review</label>
+    <p class="hint">Hermes and generated evaluator code execute on the host. OpenHands and DeerFlow task tools execute in pinned Docker containers. Provider usage is billed to the configured account.</p>
+    <div id="form-error" class="error" role="alert" hidden></div>
+    <div class="dialog-actions"><button class="secondary close-dialog" type="button">Cancel</button><button class="primary" id="submit" type="submit">Launch campaign ↗</button></div>
+  </form></dialog>
+  <dialog id="test-dialog"><div class="dialog-heading"><h2 id="test-title"></h2><button class="icon-button close-dialog" aria-label="Close">×</button></div><div id="test-detail"></div></dialog>
+</body>
+</html>

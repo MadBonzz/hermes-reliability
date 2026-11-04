@@ -1,18 +1,59 @@
 # Source-grounded evaluation orchestrator
 
-The improvement-phase example uses Baseten `meta-models/muse-spark-open-1026`
-for the main agent and all three reviewers, and `command-a-03-2025` in the target runtime. Configure
+The default example uses Meta `muse-wonder-1.0`
+for the main agent and all three reviewers, and `muse-spark-1.3-contributor` in the target runtime. Configure
 exact endpoints, credential variable names, the Hermes interpreter and a pinned
 GitHub revision in `orchestrator.example.json`. Credentials resolve from shell
 variables followed by the repository-root `.env`.
+
+## Local dashboard
+
+Run `python -m src.orchestrator.app` and open `http://localhost:8765`.
+The dashboard accepts remote repositories and clean local Git checkouts, clones
+them into owned run storage, and launches a frozen controller in a separate process.
+It displays source activity, test contracts, reviewer findings, execution lanes,
+iteration analyses and recorded usage. Runtime settings are editable before launch.
+Native Docker images must match the selected source commit.
+
+`examples/campaigns/` supplies three read-only completed campaign snapshots on a
+fresh checkout. The catalog merges these with local campaigns and suppresses a
+bundle when its full source attempt is present. Bundled findings are already cached,
+so viewing them makes no provider calls. Launch, stop, retry and scenario-reuse actions
+operate on local campaigns. Raw traces and machine configuration stay in local storage.
+
+The sidebar retains active campaigns and normally completed campaigns whose final
+round has causal findings. Aborted or incomplete historical attempts remain on disk.
+While the dashboard is running, `findings.py` prepares each retained analysis for
+display with the campaign's configured orchestrator model. Structured cards cover
+every source finding and unresolved gap, with original attribution, certainty and
+citations attached by code. The presentation JSON is schema-validated, with up to
+two repair requests after an invalid response. No output-token cap is added.
+Results are cached by analysis, prompt, schema and model settings under each round's
+`dashboard_findings/` directory. Separate API traces and usage include failed attempts.
+A presentation failure appears in the UI with a retry action. This formatting step
+also picks up analyses from already-running frozen controllers.
+
+Earlier campaigns are discovered from local run directories. Selecting one supplies
+`seed_scenarios` with a directory and filename-to-SHA-256 mapping from its saved
+revision. The runner verifies and copies these contracts into the fresh workspace,
+and indexes earlier analyses, reports and cleaned transcripts for evidence reads.
+It then reviews the suite with the active-test cap. The initial five-test cap applies to
+new suites. A different prior Hermes revision also enables version mode. Existing
+evaluator extensions require current validation and explicit implementation.
+
+The server binds to localhost, validates the Host header, and requires a session
+token on mutation requests. Credentials stay in `.env` or the worker environment.
+The campaign stop button writes the existing cooperative stop request. Closing the
+dashboard does not terminate its independent worker. `launch.json` records cloning,
+running and terminal launch states, including errors before a campaign is created.
 
 ## Campaign lifecycle
 
 1. Fetch or verify the configured clean agent checkout. The inspected source and
    executed runtime use the same commit. Index its files for scoped source reads.
 2. Create an editable evaluator workspace and a frozen original evaluator copy.
-   Begin with an empty scenario directory. Existing benchmark scenarios and
-   historical results are excluded from the starter inputs.
+   New suites begin with an empty scenario directory. A seeded campaign imports
+   its explicitly selected earlier scenarios and evidence.
 3. The main agent reads source and writes up to five initial scenario JSON files
    conforming to the repository's current benchmark schema. It may patch campaign-local evaluator
    code and add regression tests for new mechanisms.

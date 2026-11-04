@@ -5,6 +5,7 @@
 
 # Local evaluation evidence: reports, traces, correlated requests, diagnostics,
 # and retained task workspaces. Authored inputs live in /scenarios/.
+# Reviewed public dashboard snapshots live separately in /examples/campaigns/.
 /eval_harness/
 
 # Verified local archives of retired benchmarks and private run evidence.

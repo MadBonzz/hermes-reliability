@@ -30,6 +30,8 @@ from src.orchestrator.prompts import (
     RECOVERY_FEEDBACK,
     REPEATED_READ_ADVISORY,
     REVIEWERS,
+    SEED_GUIDANCE,
+    SEEDED_GENERATION_TASK,
     SMOKE_SCOPE,
     SOURCE_READ_HINT,
     VARIANTS,
@@ -481,25 +483,17 @@ def prepare_source(config, output):
     source_config = config["source"]
     repository = source_config["repository"]
     revision = source_config["revision"]
-    source = Path(source_config.get("local_path", output / "agent_source")).resolve()
-    if not source.exists():
-        subprocess.run(["git", "clone", "--depth", "1", repository, str(source)], check=True)
-        subprocess.run(["git", "-C", str(source), "fetch", "origin", revision], check=True)
-        subprocess.run(["git", "-C", str(source), "checkout", "--detach", revision], check=True)
-
-    def git(*args):
-        return subprocess.check_output(["git", "-C", str(source), *args], text=True).strip()
-
-    actual = git("rev-parse", "HEAD")
-    if actual != revision:
-        raise ValueError(f"Agent revision mismatch: {actual} != {revision}")
-    if git("remote", "get-url", "origin").removesuffix(".git") != repository.removesuffix(".git"):
-        raise ValueError("Agent repository remote does not match configuration")
-    if git("status", "--porcelain", "--untracked-files=no"):
-        raise ValueError("Agent source contains tracked modifications")
-    paths = git("ls-files").splitlines()
+    source = _checkout(
+        repository, revision, source_config.get("local_path", output / "agent_source")
+    )
+    paths = (
+        subprocess.check_output(["git", "-C", str(source), "ls-files", "-z"], text=True)
+        .rstrip("\0")
+        .split("\0")
+    )
     save(
-        output / "agent_source.json", {"repository": repository, "revision": actual, "files": paths}
+        output / "agent_source.json",
+        {"repository": repository, "revision": revision, "files": paths},
     )
     return source
 
@@ -517,7 +511,10 @@ def _checkout(repository, revision, path):
 
     if git("rev-parse", "HEAD") != revision:
         raise ValueError(f"Agent revision mismatch at {path}: expected {revision}")
-    if git("remote", "get-url", "origin").removesuffix(".git") != repository.removesuffix(".git"):
+    # A local Git checkout can have no origin. Its file URI identifies that source.
+    if repository != path.as_uri() and git("remote", "get-url", "origin").removesuffix(
+        ".git"
+    ) != repository.removesuffix(".git"):
         raise ValueError("Agent repository remote does not match configuration")
     if git("status", "--porcelain", "--untracked-files=no"):
         raise ValueError(f"Agent source at {path} contains tracked modifications")
@@ -549,7 +546,8 @@ def prepare_version_change(config, output, source):
 
     if git("cat-file", "-e", f"{base}^{{commit}}", check=False).returncode:
         git("fetch", "origin", base)  # make the base tree available for diffing
-    changed = git("diff", "--name-only", base, target).stdout.split()
+    changed = git("diff", "--name-only", "-z", base, target).stdout.rstrip("\0").split("\0")
+    changed = [path for path in changed if path]
     if not changed:
         raise ValueError("No file changes between base_revision and revision")
     diff = git("diff", base, target).stdout
@@ -635,7 +633,11 @@ def api_usage(directory):
             task = ""
         role = next(
             (name for name in REVIEWERS if f"as {name}." in task),
-            "analysis" if task.startswith("Analyze") else "main",
+            "dashboard_findings"
+            if task.startswith("Present dashboard findings")
+            else "analysis"
+            if task.startswith("Analyze")
+            else "main",
         )
         group = by_role.setdefault(
             role, {"requests": 0, "input_tokens": 0, "output_tokens": 0, "elapsed_seconds": 0}
@@ -953,7 +955,9 @@ def review_recovery(config, evidence):
     }
 
 
-def run(config, client_factory=Client, adapter_factory=make_adapter, execute=False):
+def run(
+    config, client_factory=Client, adapter_factory=make_adapter, execute=False, on_created=None
+):
     if {"resume_final_execution_from", "recovery_evaluator_repairs"}.intersection(config):
         raise ValueError(
             "One-off historical evaluator repairs are retired. "
@@ -1010,6 +1014,8 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
 
     print(output, flush=True)
     try:
+        if on_created:
+            on_created(output)
         limits = {
             "rounds": 3,
             "initial_tests": 5,
@@ -1027,6 +1033,7 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 raise ValueError(f"{key} must be between 1 and {maximum}")
         if limits["initial_tests"] > limits["active_tests"]:
             raise ValueError("Initial tests exceed active test cap")
+        progress("source")
         source = prepare_source(config, output)
         version_mode = bool(config["source"].get("base_revision"))
         version_request, base_adapter, change = None, None, None
@@ -1114,6 +1121,17 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
             if config["adapter"].get("kind") in {"openhands", "deerflow"}
             else "hermes"
         )
+        seed = None
+        if config.get("seed_scenarios") and not (recovery or resumed):
+            seed = workspace.seed(config["seed_scenarios"], limits["active_tests"])
+            seed["prior_evidence"] = []
+            for name, expected in config["seed_scenarios"].get("evidence", {}).items():
+                path = Path(name)
+                if path.is_symlink() or sha256_file(path) != expected:
+                    raise ValueError(f"Saved campaign evidence changed: {path.name}")
+                eid = evidence.add(path)
+                seed["prior_evidence"].append({"id": eid, **evidence.items[eid]})
+            save(output / "seed_scenarios.json", seed)
         catalog_evidence = None
         if execute and hasattr(adapter, "inspect_tool_catalog"):
             catalog = adapter.inspect_tool_catalog(output / "native_catalog", trusted.root)
@@ -1151,7 +1169,11 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                 conversations["main"] = resumed["messages"]
             if recovery and index == 1:
                 conversations["main"] = recovery["messages"]
-            limit = limits["initial_tests"] if index == 1 else limits["active_tests"]
+            limit = (
+                limits["initial_tests"]
+                if index == 1 and not config.get("seed_scenarios")
+                else limits["active_tests"]
+            )
             workspace.active_limit = limit
             for generation in range(
                 resumed["generation"] if continuing else 1, limits["generations"] + 1
@@ -1164,7 +1186,11 @@ def run(config, client_factory=Client, adapter_factory=make_adapter, execute=Fal
                     client,
                     evidence,
                     {
-                        "task": GENERATION_TASK,
+                        "task": SEEDED_GENERATION_TASK
+                        if config.get("seed_scenarios")
+                        else GENERATION_TASK,
+                        "seed_suite": seed,
+                        "seed_guidance": SEED_GUIDANCE if config.get("seed_scenarios") else None,
                         **(
                             variant_context(variant, "main")
                             if not conversations["main"]

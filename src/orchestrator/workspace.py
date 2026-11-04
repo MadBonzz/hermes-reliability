@@ -430,3 +430,19 @@ class Workspace:
             self.root, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
         )
         return self.inventory()
+
+    def seed(self, selection, limit):
+        """Import a verified earlier scenario revision into a fresh campaign."""
+        source = Path(selection["directory"]).resolve()
+        expected = selection["sha256"]
+        files = sorted(source.glob("*.json"))
+        if not expected or {p.name for p in files} != set(expected):
+            raise ValueError("Saved scenario selection changed")
+        if not 1 <= len(files) <= limit:
+            raise ValueError(f"Saved suite must contain 1 to {limit} tests")
+        if any(p.is_symlink() or sha256_file(p) != expected[p.name] for p in files):
+            raise ValueError("Saved scenario content changed")
+        for path in files:
+            shutil.copy2(path, self.root / "scenarios" / path.name)
+        self.validate(limit)
+        return {"directory": str(source), "sha256": expected, "count": len(files)}

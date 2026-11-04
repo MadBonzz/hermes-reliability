@@ -97,7 +97,9 @@ format; it is not a selectable legacy execution mode.
 | `src/evaluation/api_trace.py` | HTTPX request/response capture, streaming evidence, correlation, credential redaction. |
 | `src/evaluation/check_hermes_integration.py` | Offline checks against the real installed Hermes tools and workspace behavior. |
 | `src/orchestrator/prompts.py` | Authored main/review/analysis instructions and response-repair feedback; import these rather than embedding prompts in runtime code. |
+| `src/orchestrator/findings.py` | Cached dashboard presentation of causal analyses, with schema/source-coverage validation and separate API usage. |
 | `src/orchestrator/runner.py` | Separate generation/review/execution/analysis loop and indexed evidence access. |
+| `src/orchestrator/app.py`, `src/orchestrator/dashboard.py`, `src/orchestrator/web/` | Local dashboard, frozen background launches, evidence presentation and earlier-suite selection. |
 | `src/orchestrator/adapters.py`, `src/orchestrator/hermes_worker.py` | Trusted command-adapter contract and fresh-process Hermes bridge. |
 | `src/evaluation/agent_container.py`, `src/evaluation/agent_worker.py`, `src/evaluation/native_agent_bridges.py` | Isolated native OpenHands/DeerFlow runtimes and inference/mock relay. |
 | `src/evaluation/eval_container_worker.py`, `src/orchestrator/container_worker.py` | Native phase execution and authored-prefix preflight. |
@@ -592,6 +594,10 @@ configured import order, modern Python annotations, and formatting.
 
 - Keep `.env`, API keys, server logs, reports, traces, diagnostics, and retained
   task workspaces out of version control. `.gitignore` excludes `eval_harness/`.
+- The three user-authorized public dashboard snapshots in `examples/campaigns/`
+  are an exception for reviewed presentation data. Keep them portable and free
+  of credentials and personal machine paths. Their cached findings must display
+  without provider calls. Preserve their original outcomes and attribution.
 - Use ignored output locations. Arbitrary user-chosen `--output` and
   `--workspace-root` paths are not automatically covered by ignore rules.
 - Never delete previous runs as incidental cleanup. Workspace deletion must target

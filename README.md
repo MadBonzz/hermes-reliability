@@ -1,359 +1,254 @@
-# Agent reliability evaluation harness
+# Agent Reliability Lab
 
-Evaluate how a model and agent runtime handle tasks involving persistent state,
-multiple tools, changing requirements and failures. Scenarios test properties such
-as idempotency, consistency, recovery, ordering, authorization and confidentiality.
-The harness supplies fixtures, mock services, perturbations and assertions, and
-records the evidence needed to explain each outcome.
+An agent that designs experiments for other agents. Point it at a supported agent's
+repository, watch it generate and review realistic tasks, then inspect what happened
+when the agent encountered changing state, failed tools, untrusted content, or interrupted work.
 
-Supported runtimes are Hermes (installed separately on the host), OpenHands and
-DeerFlow (pinned native runtimes in Docker). Models connect through a Chat
-Completions API with structured tool calls. The orchestrator can generate and
-review new tests against each runtime's pinned source and available tools.
+The local dashboard follows the full loop — source inspection, scenario generation,
+three independent reviewers, execution, causal analysis, and the next iteration.
+It supports **Hermes, OpenHands, and DeerFlow**, plus comparisons between Hermes revisions.
 
-## Benchmark
+## 1. Install
 
-The current suite contains **109 scenarios and 192 user turns** in [scenarios/](scenarios/),
-validated by [scenario.schema.json](scenario.schema.json). Run it with `src/evaluation/evaluate.py`.
-It includes seven controlled baseline/treatment pairs, diagnostic continuations,
-neutral workspaces, cost accounting and workload complexity dimensions. Eighteen
-scaled tasks vary reimbursement, customer retirement and research across 2, 5 and
-10 input files and one or three turns.
+Requirements are **Python 3.11+**, **Git**, and **uv**. OpenHands and DeerFlow also
+require a running **Docker Engine** with a built runtime image. Hermes uses its own
+installed Python environment.
 
-[BENCHMARK.md](BENCHMARK.md) describes execution contracts and limitations;
-[PROPERTY_CATALOG.md](PROPERTY_CATALOG.md) maps properties to tasks.
+From your clone of this repository, run
 
-The retired V1 scenarios, three runs, transcripts, analyses and source snapshots
-are stored locally in the ignored `archives/benchmark_v1_20261103.zip`. Its embedded
-`ARCHIVE_MANIFEST.json` records original paths and SHA-256 hashes. Extract it into
-a separate directory to inspect the old edition. The archive is not published.
-Existing newer run directories retain their original paths and frozen evidence.
-New runs use `eval_harness/runs/`. Scenario numbers are unchanged; current IDs no
-longer have the `v2_` prefix. `benchmark_version: 2` remains the data-format
-identifier, not a second selectable benchmark.
-
-## Setup
-
-Use uv and Python 3.11+ for validation and development. Hermes evaluations require
-its Python environment; the tested host installation uses Python 3.14 on Windows.
-OpenHands and DeerFlow use Linux Docker images and do not require a host Hermes
-installation. See [native runtime setup](ORCHESTRATOR.md#native-openhands-and-deerflow-adapters)
-for image builds, source pinning and configuration. Permission-fault tasks require
-a normal user account because root can bypass the intended restrictions.
-
-Run these commands from the repository root.
-
-~~~sh
+```sh
 uv sync --locked
-uv run --locked python src/evaluation/evaluate.py --validate-only
-~~~
+```
 
-For Hermes, copy [.env.example](.env.example) to .env and configure your installation.
+To explore the dashboard immediately, run `uv run --locked python -m src.orchestrator.app`
+and open `http://localhost:8765`. It includes three completed example campaigns,
+one each for Hermes, OpenHands and DeerFlow. Viewing these examples requires no API key
+or installed agent runtime. Continue below to launch new experiments.
 
-~~~dotenv
-HERMES_AGENT_ROOT=/absolute/path/to/hermes/workspace
-EVAL_BASE_URL=http://localhost:1235/v1
-EVAL_MODEL=your-exact-model-id
-# EVAL_API_KEY=your-key-if-required
-~~~
+Copy `.env.example` to `.env` using your editor or file manager. For the default
+Meta configuration, add
 
-HERMES_AGENT_ROOT identifies the checkout containing run_agent.py. Activate the
-Hermes Python environment separately.
+```dotenv
+META_KEY=your-meta-api-key
+```
 
-~~~sh
-# Linux
-source /path/to/hermes/venv/bin/activate
-~~~
+The default models are **muse-wonder-1.0** for the orchestrator and all three reviewers,
+and **muse-spark-1.3-contributor** for the agent being evaluated. Credentials are read
+from the shell environment, then the repository-root `.env`. Keep `.env` private.
 
-~~~powershell
-# Windows PowerShell
-& 'C:/path/to/hermes/venv/Scripts/Activate.ps1'
-~~~
+## 2. Prepare the agent runtime
 
-Install harness dependencies into that environment while preserving Hermes's
-other packages.
+### Hermes
 
-~~~sh
+Install Hermes and its dependencies using the Hermes repository's setup process.
+Locate the Python executable in that installation's environment. The dashboard asks
+for this executable under **Runtime Python**.
+
+Install this project's dependencies into the Hermes environment while preserving
+its existing packages. Activate that environment, then run from this project
+
+```sh
 uv sync --active --inexact --locked --no-dev
-~~~
+```
 
-Configuration precedence is CLI arguments, shell environment, repository-root
-.env, then defaults. Values are literal and interpolation is disabled. Legacy
-LM_STUDIO_URL and LM_STUDIO_API_KEY aliases remain supported.
+For direct benchmark commands, also set `HERMES_AGENT_ROOT` in `.env` to the checkout
+containing `run_agent.py`. Dashboard campaigns clone their selected source into
+private run storage and pass that checkout to Hermes.
 
-## Run the benchmark
+### OpenHands or DeerFlow
 
-With the Hermes environment active, use the configured model endpoint.
+Build a native runtime image from a clean checkout at the revision you want to test.
+The following OpenHands example uses a pinned revision already exercised by this project
 
-~~~sh
-# Full suite
-uv run --active --no-sync python src/evaluation/evaluate.py
+```sh
+git clone https://github.com/OpenHands/software-agent-sdk.git eval_harness/sources/openhands_sdk
+git -C eval_harness/sources/openhands_sdk checkout b0789c73151a967fdd4a10f8383d2c0bc7109563
+docker build -f src/evaluation/agent_runtime.Dockerfile --build-arg AGENT=openhands --build-arg SOURCE_REVISION=b0789c73151a967fdd4a10f8383d2c0bc7109563 -t agent-eval-openhands:b0789c7 eval_harness/sources/openhands_sdk
+```
 
-# Select a scenario; repeat --scenario-id for more
-uv run --active --no-sync python src/evaluation/evaluate.py --scenario-id scen_41_versioned_event_edit
+For DeerFlow
 
-# Repeat the suite with reproducible condition ordering
-uv run --active --no-sync python src/evaluation/evaluate.py --repetitions 3 --order-seed 17
+```sh
+git clone https://github.com/bytedance/deer-flow.git eval_harness/sources/deerflow
+git -C eval_harness/sources/deerflow checkout 14abd9a28eb035f277aa56098caab1b0600c6e8d
+docker build -f src/evaluation/agent_runtime.Dockerfile --build-arg AGENT=deerflow --build-arg SOURCE_REVISION=14abd9a28eb035f277aa56098caab1b0600c6e8d -t agent-eval-deerflow:14abd9a eval_harness/sources/deerflow
+```
 
-# Run the frozen comparison suite with Hermes's approval gate active
-uv run --active --no-sync python src/evaluation/evaluate.py --suite-file suites/core_v1.json --hermes-approval gate
+Select that image in the dashboard. Leave **Revision** empty to use its labelled
+source commit. The image and inspected source must match. Newer source revisions
+require a matching rebuilt image and may need adapter updates.
 
-# Choose a fresh output directory
-uv run --active --no-sync python src/evaluation/evaluate.py --output eval_harness/my_run
-~~~
+For these runtimes, use this project's `.venv` Python as **Runtime Python**.
+The dashboard fills settings from earlier local campaigns when available.
 
-Each run freezes the source implementation, schema and selected scenario
-contracts before starting workers. Each phase runs in a fresh process, a neutral
-workspace_1 directory and a private Hermes profile. Tool-side Python environments
-are created per phase. History, files and service state persist across turns
-within that phase.
+## 3. Open the dashboard
 
-The runner sends the authored user request without an EVAL prefix. Scenario IDs, condition
-labels, assertions and complexity metadata stay in evaluator evidence. Before API
-dispatch, a validator checks messages and tool definitions for known private
-repository paths and evaluation markers.
+```sh
+uv run --locked python -m src.orchestrator.app
+```
 
-Ordinary task failures retain their failed gates. An early failure can launch a
-fresh diagnostic continuation with an authored successful prefix, including real
-tool calls, service effects and verified state. Its assistant messages are
-synthetic. Conditional continuation results are reported separately from ordinary
-task completion.
+Open **http://localhost:8765**. Use `--port 8766` if that port is occupied.
 
-Controlled cases run baseline and treatment conditions. Supported service-only
-prefixes are sampled once and copied into independent branch state. Shared
-prefix support excludes successful file operations and persistent shell/code
-sessions because their native state cannot yet be checkpointed safely. File-heavy
-pairs branch before the first turn. See [the branching contract](BENCHMARK.md#controlled-branching).
+1. Click **New campaign** and choose Hermes, OpenHands, or DeerFlow.
+2. Enter a repository URL or a clean local Git checkout. Remote repositories are
+   cloned automatically. A local checkout is cloned into campaign-owned storage.
+3. Configure the runtime Python and, for OpenHands/DeerFlow, the Docker image.
+4. Choose an earlier campaign to reuse its tests, or choose **Start a new test suite**.
+5. Review the model settings and budgets, then click **Launch campaign**.
 
-Separate model runs can use separate CLI processes and output directories.
-Scenarios inside one process execute sequentially because API capture and runtime
-hooks have a single active scope. Frozen worker source protects an ongoing run
-from later edits to the checkout.
+The main agent and reviewers use the same orchestrator model. Model endpoints,
+credential-variable names, scope, approval mode, and budgets are editable under
+**Models, budgets & comparison settings**. The defaults allow five initial tests,
+twelve active tests, three generations per round, and three execution rounds.
+A seeded campaign can begin with up to twelve existing tests.
 
-The runner exits with 0 when campaign execution completes, including campaigns with failed
-tasks. Runtime, logging and worker errors stop the campaign and return 2.
-Inspect report.json for task outcomes. Hermes's iteration limit counts model API
-iterations, and one iteration can request multiple tools. Native OpenHands uses
-SDK iterations; DeerFlow uses `--recursion-limit` graph supersteps, which include
-middleware execution and are not equivalent to model calls. See the
-[native runtime contract](ORCHESTRATOR.md#native-openhands-and-deerflow-adapters).
+The dashboard shows source reads and edits, readable scenario cards with actual
+user turns and checks, reviewer findings, results by evaluator and condition, and
+causal findings. The sidebar shows active campaigns and completed campaigns with
+final causal findings. The dashboard prepares readable finding cards using an additional
+call to that campaign's orchestrator model for each analyzed round. It caches the result
+and records the additional requests and tokens. Each card retains its original findings,
+attribution and citations. **Stop at next boundary**
+requests a cooperative stop after the current request or execution stage finishes.
+Closing the dashboard leaves its separately launched campaign worker running.
 
-## Model endpoints
+The three bundled examples are portable, read-only snapshots under `examples/campaigns/`.
+They include scenario contracts, reviews, branch outcomes, analyses, cached finding cards
+and usage totals. Private machine paths are replaced with placeholders. Citations retain
+their original identifiers. Complete raw API and execution traces are retained locally.
+If the matching full campaign exists on your machine, the sidebar shows that local campaign.
 
-Use an API root such as /v1 and the provider's exact model identifier. The harness
-passes the identifier through unchanged. The endpoint must support Chat
-Completions and structured tools.
+Generated evaluator code and Hermes tools execute on the host. OpenHands and
+DeerFlow task tools execute in nonroot containers without host mounts or network
+access. Model API calls are relayed by the host and billed to your provider account.
+The dashboard binds to localhost and uses a session token for launch/stop requests.
 
-| Connection | Configuration |
-|---|---|
-| LM Studio | Use the server's displayed URL and loaded model ID. |
-| Ollama | Use `http://localhost:11434/v1`, a tool-capable model tag and a nonempty placeholder API key. |
-| Cohere | Set COHERE_API_KEY or COHERE_KEY and select `--provider cohere`. |
-| Baseten | Set BASETEN_API_KEY and select `--provider baseten`. BASETEN_KEY and BAESTEN_KEY are accepted aliases. |
-| Other compatible providers | Set EVAL_BASE_URL, EVAL_MODEL and EVAL_API_KEY, or supply CLI overrides. |
+### Local models and other APIs
 
-Select Command A explicitly when using the Cohere profile.
+Both orchestrator and target connections accept a Chat Completions API root and
+an exact model ID. Tool-capable models are required for the target. The orchestrator
+must be able to return the structured action/response objects described in its prompts.
 
-~~~sh
-uv run --active --no-sync python src/evaluation/evaluate.py --provider cohere --model command-a-03-2025
-~~~
+| Provider | API root | Credential variable example |
+|---|---|---|
+| Meta | `https://api.meta.ai/v1` | `META_KEY` |
+| LM Studio | The URL shown by your server, ending in `/v1` | `LOCAL_API_KEY` |
+| Ollama | `http://localhost:11434/v1` | `LOCAL_API_KEY` |
+| Other compatible API | Your provider's Chat Completions API root | `PROVIDER_API_KEY` |
 
-The profile's default model is command-a-plus-05-2026. Command A+ uses high
-reasoning effort. The Cohere profile defaults to seven seconds between API
-dispatches, including retries. Use --request-interval to change pacing.
+Add the named variable to `.env`. For a local endpoint without authentication,
+use a nonempty placeholder such as `LOCAL_API_KEY=local`. Enter the server's exact
+model identifier. Orchestrator output-token caps are optional explicit configuration.
+Target frameworks can supply their own SDK or retry defaults, recorded in API traces.
 
-The Baseten profile defaults to meta-models/muse-spark-open-1026.
+## Reuse tests and compare framework versions
 
-~~~sh
-uv run --active --no-sync python src/evaluation/evaluate.py --provider baseten
-~~~
+The dashboard discovers earlier campaigns for the selected repository. Reusing one
+imports its hash-verified scenario snapshot into the new campaign. The orchestrator
+can read the selected campaign's analyses, reports and cleaned transcripts through
+indexed evidence. It
+can retain, revise, remove, or add tests, with review and validation applied again.
+Earlier custom evaluator code requires explicit reimplementation if its capabilities
+are needed by the retained tests.
 
-Explicit connection arguments override profile defaults. Provider availability,
-model access and request allowances are controlled by the serving account.
+For Hermes, selecting an earlier campaign at a different revision automatically
+sets that revision as the comparison base. You can also enter a **Base revision**.
+The orchestrator receives the source diff and indexed prior results, then records
+predicted outcomes before execution.
 
-## Evidence, cost and analysis
+| Execution lane | Framework | Evaluator |
+|---|---|---|
+| `candidate` | Selected revision | Orchestrator-edited evaluator |
+| `trusted` | Selected revision | Original evaluator |
+| `base_version` | Earlier revision | Original evaluator, in version mode |
 
-Campaign outputs live under `eval_harness/runs/<run-id>/` by default.
+Each lane samples its own trajectory. The differential report classifies observed
+changes by property layer. Interpretation uses transcripts and evidence to assess
+framework changes, model variability, verifier defects, and unavailable capabilities.
 
-| Artifact | Contents |
-|---|---|
-| report.json | Campaign configuration, source hashes, case outcomes and branch reports |
-| source/ | Frozen worker implementation and schema |
-| repeat_N/ | Per-scenario ordinary, prefix, baseline, treatment and diagnostic phases |
-| Phase report.json | Frozen contract, turn checks, tool events, service state and filesystem snapshots |
-| Phase traces/ | Turn JSONL and captured API exchanges |
-| metrics.json and analysis.md | Computed completion, cost and complexity summaries |
+## CLI alternatives
 
-API capture records requests, streamed or nonstreamed responses, retries,
-transport errors and provider-returned usage. Correlation uses request IDs and
-private run/turn context. Known API credentials are redacted. Captured task
-content and synthetic secrets remain available for evaluation.
+Copy `orchestrator.example.json` or `orchestrator.regression.example.json` into
+`eval_harness/`, configure the pinned source and runtime, then run
 
-Every executed tool callback contributes to cost metrics, including calls unused
-by a process assertion. Metrics include repeated identical calls, failed results,
-API requests, elapsed turn time and pacing. Repetition may be necessary
-verification, polling or retry. Missing token usage is recorded explicitly.
+```sh
+uv run --locked python -m src.orchestrator --config eval_harness/my_campaign.json --execute
+```
 
-Optional --prices accepts an exact-model rate mapping. Keep local pricing
-configuration under eval_harness/ and consult
-[the price format](BENCHMARK.md#cost-and-efficiency). Dollar estimates require
-complete usage and applicable rates. Local hardware/electricity costs require
-separate measurement.
+Omit `--execute` to generate and review tests. Add `--smoke` for one active test and
+one execution round. The full configuration and native adapter contracts are in
+[ORCHESTRATOR.md](ORCHESTRATOR.md).
 
-Run read-only post-processing on a saved campaign.
+## Run the authored benchmark
 
-~~~sh
-uv run --locked python src/evaluation/analyze.py eval_harness/runs/RUN_ID/report.json
-uv run --locked python src/evaluation/audit.py eval_harness/runs/RUN_ID/report.json
-~~~
+The authored suite contains **109 scenarios and 192 user turns**, including seven
+controlled pairs and eighteen scaled workflows. It uses `scenario.schema.json`.
+Validate without installing an agent runtime
 
-The audit checks capture completeness, tool callbacks, shared histories and
-recomputed usage. An interrupted response may have an explicit transport error
-and no body or usage. Logging failures invalidate the evaluation.
+```sh
+uv run --locked python -m src.evaluation.evaluate --validate-only
+```
 
-Passive native-control observations record selected Hermes checks, including
-allowed operations, refusals, source hashes and hook availability. Missing
-observations leave coverage unresolved. A refusal can block an unsafe attempt or
-obstruct a legitimate operation. Task completion and property enforcement need
-the actual call, state and verifier evidence.
+For Hermes, activate its prepared Python environment and configure
 
-The automatic summaries and attribution rules have bounded coverage. Detailed
-causal interpretation still requires reviewing traces. Native file protections,
-mock-service preconditions, harness interventions and application-specific
-requirements have different responsibilities.
+```dotenv
+HERMES_AGENT_ROOT=/path/to/hermes-agent
+EVAL_BASE_URL=https://api.meta.ai/v1
+EVAL_MODEL=muse-spark-1.3-contributor
+EVAL_API_KEY=your-api-key
+```
 
-## Scenarios and verification
+Then run
 
-DeerFlow final deliverables use its native outputs directory. Select
-`artifact_scope: "outputs"` on file assertions for those artifacts; ordinary
-checks continue to use the task workspace. See [artifact scopes](ORCHESTRATOR.md)
-for supported checks and read-only oracle probes.
+```sh
+uv run --active --no-sync python -m src.evaluation.evaluate
+uv run --active --no-sync python -m src.evaluation.evaluate --suite-file suites/core_v1.json --hermes-approval gate
+uv run --active --no-sync python -m src.evaluation.evaluate --scenario-id scen_41_versioned_event_edit --repetitions 3
+```
 
-Edit the standalone JSON files directly using
-[scenario.schema.json](scenario.schema.json). Each task defines its request,
-mock interfaces, turn perturbations and state/process/output checks.
+For local models, change `EVAL_BASE_URL`, `EVAL_MODEL`, and `EVAL_API_KEY` to the local
+server settings. CLI arguments override the shell environment and `.env`.
+The frozen `core_v1` selection contains 32 scenarios for comparisons.
 
-Mock services support conditional updates, idempotent replay, pagination,
-transient errors and prerequisite-dependent actions. Their state and committed
-effects are recorded independently of agent-editable files. File-backed mocks
-also exist. Perturbations can change files, permissions, service state, fault
-flags and conversation history.
+## Evidence and interpretation
 
-All assertions must pass at a turn's gate. State checks inspect artifacts and
-service effects. Process checks inspect structured tool calls. Output checks
-include text and structured JSON assertions. Visible requests must communicate
-material policies and output contracts. A final-state pass alone cannot prove
-that every intermediate action was safe.
+Dashboard launches live under `eval_harness/orchestrator/dashboard/`. Each launch
+freezes controller source and schema. Campaigns retain configuration, source
+provenance, scenario revisions, reviewer feedback, both evaluator results,
+transcripts, raw API/tool evidence, costs, and analyses. Benchmark runs live under
+`eval_harness/runs/`. These directories and `.env` are ignored by Git.
 
-Validate authored prefixes through real installed tools without model inference.
+A failed prerequisite can produce a separately labelled diagnostic continuation
+from an authored successful prefix. Controlled comparisons use independent branch
+state. Shared sampled prefixes currently support portable service state. File-bearing
+workflows can branch at turn one. Task completion, property exposure, enforcement,
+and evaluation validity are reported separately. Dollar estimates require explicit
+model pricing. Missing usage remains unknown.
 
-~~~sh
-uv run --active --no-sync python src/evaluation/check_reference_prefixes.py --scenarios scenarios --schema scenario.schema.json
-~~~
+Read [BENCHMARK.md](BENCHMARK.md) for scoring and branching contracts and
+[PROPERTY_CATALOG.md](PROPERTY_CATALOG.md) for property coverage.
 
-## Exploratory orchestrator
+## Development
 
-The separate [orchestrator](ORCHESTRATOR.md) generates scenarios from a pinned
-Hermes, OpenHands or DeerFlow GitHub checkout. Three reviewer agents assess the
-suite, and the main agent edits campaign-local scenarios and evaluator code. Each execution round compares
-the edited evaluator with a frozen copy of this repository's evaluator, then feeds
-cleaned transcripts back to the main agent. The starter begins with up to five
-tests, permits twelve active tests and defaults to three execution rounds.
-
-Copy [orchestrator.example.json](orchestrator.example.json) to an ignored local
-location. Configure exact orchestrator and target models, credential environment
-variable names, a source revision and budgets. This entry point reads credentials
-from the shell environment and repository-root `.env`.
-
-~~~sh
-# Generate and review proposals
-uv run --locked python -m src.orchestrator --config eval_harness/my_orchestrator.json
-
-# Also execute reviewed proposals
-uv run --locked python -m src.orchestrator --config eval_harness/my_orchestrator.json --execute
-
-# One-test, one-round live smoke campaign through both evaluators
-uv run --locked python -m src.orchestrator --config eval_harness/my_orchestrator.json --smoke --execute
-~~~
-
-## Repository layout
-
-| Path | Responsibility |
-|---|---|
-| scenarios/ | Authored tasks and mock definitions |
-| scenario.schema.json | Validation contracts |
-| src/evaluation/hermes_runner.py | Hermes turn execution, verification and evidence capture |
-| src/evaluation/evaluate.py, src/evaluation/eval_worker.py, src/evaluation/benchmark.py | Campaign workers, branch lifecycle and presentation |
-| src/evaluation/mock_registry.py, src/evaluation/mock_services.py, src/evaluation/perturbations.py | Tool registration, service state and injected changes |
-| src/evaluation/checks.py, src/evaluation/scenario_validation.py, src/evaluation/reference_execution.py | Assertions, preflight and authored prefixes |
-| src/evaluation/artifact_checks.py | Private container-based behavioral artifact checks |
-| src/evaluation/api_trace.py, src/evaluation/runtime_support.py, src/evaluation/control_observer.py | API capture, state snapshots and native-control observations |
-| src/evaluation/evaluation_metrics.py, src/evaluation/analyze.py, src/evaluation/audit.py | Cost, complexity and campaign audits |
-| src/evaluation/attribute_failures.py, src/evaluation/audit_api_evidence.py | Reusable turn-attribution and API-evidence helpers |
-| src/evaluation/execution_isolation.py, src/evaluation/utils.py | File-tool path policy and runtime configuration |
-| src/orchestrator/ | Generation/review loop, workspace editing, execution adapters and transcript export |
-| src/orchestrator/prompts.py | Main-agent, reviewer, analysis and response-repair instructions |
-| src/evaluation/agent_container.py, src/evaluation/agent_worker.py, src/evaluation/native_agent_bridges.py | Docker isolation, host relay and native OpenHands/DeerFlow entry points |
-| src/evaluation/eval_container_worker.py, src/evaluation/agent_runtime.Dockerfile | Native phase execution and pinned-source runtime images |
-| src/evaluation/transcript_formatting.py | Shared native-check glossary and transcript tables |
-| tests/ | Regression tests |
-| eval_harness/ | Private generated workspaces, runs, traces, analyses and orchestrator output |
-
-[AGENTS.md](AGENTS.md) supplies contributor guidance. `src/evaluation/` contains
-the benchmark runner, runtime bridges, checks and evidence capture.
-`src/orchestrator/` contains generation, review, revision and execution coordination.
-Its [prompts.py](src/orchestrator/prompts.py) defines the main-agent policy, design
-requirements, reviewer roles, analysis instructions and repair feedback; runtime
-code imports them. Evaluated-agent tasks remain in scenario JSON files, and the
-agent frameworks supply their own system prompts. Tests live under `tests/`.
-
-Private data is grouped by experiment: `eval_harness/orchestrator/<experiment>/attempts/`
-keeps resumed attempts together, with historical launch records and analyses beside
-them. New benchmark results live under `eval_harness/runs/`; the retained completed
-109-scenario campaign remains under `eval_harness/v2_runs/`. Pinned checkouts and runtime
-build evidence live under `eval_harness/sources/` and `eval_harness/runtime/`.
-Historical evidence retains its recorded paths; `eval_harness/relocations.json` maps
-paths moved during cleanup. `uv.lock` is the dependency lockfile.
-
-## Privacy and execution boundaries
-
-.gitignore excludes eval_harness/, credentials, common output directories,
-analysis exports, logs and runtime caches. Git contains source, authored scenarios,
-schemas, tests, dependency files and maintained documentation. Keep custom output
-paths under eval_harness/ so those ignore rules apply.
-
-For Hermes, file-tool path guards cover read_file, write_file, patch and search_files. Terminal
-and arbitrary code retain native access and can bypass this policy. It is not OS
-isolation. The request validator checks for known evaluator content before model
-dispatch, but cannot prevent every possible host-file or subprocess access.
-OpenHands/DeerFlow target execution instead runs in network-disabled, nonroot
-containers without host mounts. The evaluator and generated evaluator edits still
-execute on the host; container isolation applies to target-agent code.
-
-Traces contain task content and are private even after credential redaction.
-API capture cannot recover hidden reasoning, unreceived bytes, provider-internal
-activity or traffic in separate tool processes. Preserve incomplete evidence as
-such when interpreting a run.
-
-## Development checks
-
-~~~sh
-uv sync --locked
-uv run --locked python src/evaluation/evaluate.py --validate-only
+```sh
 uv run --locked python -m unittest discover -s tests -v
-uv run --locked ruff check --no-cache src tests
-uv run --locked ruff format --no-cache --check src tests
-~~~
+uv run --locked ruff check src tests
+uv run --locked ruff format --check src tests
+node --check src/orchestrator/web/app.js
+```
 
-In the prepared Hermes environment, exercise installed tools, prompt isolation,
-local HTTP retry/streaming capture and cleanup without a model request.
+The web interface uses the Python standard library and static HTML/CSS/JavaScript.
+It requires no frontend build step. Tests use fake model transports unless a native
+integration test is explicitly enabled.
 
-~~~sh
-uv run --active --no-sync python src/evaluation/check_hermes_integration.py
-~~~
-
-Native Docker integration tests are opt-in; ordinary unit tests do not contact
-hosted models. See [native runtime setup](ORCHESTRATOR.md#native-openhands-and-deerflow-adapters)
-for the image-specific test commands. Historical campaign recovery should use
-its frozen implementation; the current orchestrator supports current-schema execution and
-general interrupted-generation/review recovery.
+| Directory | Purpose |
+|---|---|
+| `src/orchestrator/` | Generation, review, campaign lifecycle, dashboard, and regression index |
+| `src/orchestrator/prompts.py` | Main, reviewer, and analysis instructions |
+| `src/orchestrator/web/` | Dashboard interface |
+| `examples/campaigns/` | Three reviewed, portable dashboard result snapshots |
+| `src/evaluation/` | Runtime adapters, perturbations, mocks, verification, and evidence |
+| `scenarios/`, `suites/` | Authored tasks and frozen selections |
+| `tests/` | Regression and integration checks |
+| `eval_harness/` | Private local experiments |
+| `archives/` | Retired benchmark and historical evidence |
