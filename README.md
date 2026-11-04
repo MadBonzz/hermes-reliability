@@ -95,6 +95,9 @@ uv run --active --no-sync python src/evaluation/evaluate.py --scenario-id scen_4
 # Repeat the suite with reproducible condition ordering
 uv run --active --no-sync python src/evaluation/evaluate.py --repetitions 3 --order-seed 17
 
+# Run the frozen comparison suite with Hermes's approval gate active
+uv run --active --no-sync python src/evaluation/evaluate.py --suite-file suites/core_v1.json --hermes-approval gate
+
 # Choose a fresh output directory
 uv run --active --no-sync python src/evaluation/evaluate.py --output eval_harness/my_run
 ~~~

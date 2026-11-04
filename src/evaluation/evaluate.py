@@ -20,9 +20,14 @@ if __package__ in (None, ""):
 
 from src.evaluation.benchmark import condition_spec, validate_benchmark, validate_prefix
 from src.evaluation.evaluation_metrics import load_prices
-from src.evaluation.runtime_support import sha256_file, workspace_manifest, write_json_atomic
+from src.evaluation.runtime_support import (
+    hermes_provenance,
+    sha256_file,
+    workspace_manifest,
+    write_json_atomic,
+)
 from src.evaluation.scenario_validation import DEFAULT_SUITE_NAME, load_scenarios, suite_sha256
-from src.evaluation.utils import load_eval_config
+from src.evaluation.utils import HERMES_APPROVAL_MODES, find_hermes_root, load_eval_config
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -229,6 +234,11 @@ def parse_args(argv=None):
         "--scenario-id", action="append", help="Repeat to select multiple scenarios"
     )
     parser.add_argument(
+        "--suite-file",
+        help="JSON file listing scenario IDs to run (e.g. suites/core_v1.json); "
+        "combined with any --scenario-id",
+    )
+    parser.add_argument(
         "--agent-kind", choices=["hermes", "openhands", "deerflow"], default="hermes"
     )
     parser.add_argument("--runtime-image", help="Pinned native Docker image for OpenHands/DeerFlow")
@@ -251,6 +261,13 @@ def parse_args(argv=None):
     parser.add_argument("--prices")
     parser.add_argument("--order-seed", type=int, default=0)
     parser.add_argument("--hermes-root", default=config.get("HERMES_AGENT_ROOT"))
+    parser.add_argument(
+        "--hermes-approval",
+        choices=HERMES_APPROVAL_MODES,
+        default="auto",
+        help="auto: Hermes auto-approves risky actions, so its approval gate is not "
+        "exercised (historical default). gate: leave Hermes's own approval gate active.",
+    )
     parser.add_argument("--max-iterations", type=int, default=15)
     parser.add_argument(
         "--provider", choices=["configured", "cohere", "baseten"], default="configured"
@@ -320,11 +337,22 @@ def main(argv=None):
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     scenarios = suite["scenarios"]
-    if args.scenario_id:
-        missing = set(args.scenario_id) - {s["id"] for s in scenarios}
+    selected_ids = list(args.scenario_id or [])
+    suite_file = None
+    if args.suite_file:
+        try:
+            suite_file = json.loads(Path(args.suite_file).read_text(encoding="utf-8"))
+            listed = suite_file["scenario_ids"]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            parser.error(f"Cannot read --suite-file: {exc}")
+        if not isinstance(listed, list) or not all(isinstance(i, str) for i in listed):
+            parser.error("--suite-file scenario_ids must be a list of strings")
+        selected_ids += listed
+    if selected_ids:
+        missing = set(selected_ids) - {s["id"] for s in scenarios}
         if missing:
             parser.error(f"Unknown scenario IDs: {sorted(missing)}")
-        scenarios = [s for s in scenarios if s["id"] in args.scenario_id]
+        scenarios = [s for s in scenarios if s["id"] in selected_ids]
     if args.validate_only:
         print(
             f"Validated {len(scenarios)} benchmark scenarios, {sum(bool(s.get('experiment')) for s in scenarios)} controlled pairs"
@@ -358,6 +386,18 @@ def main(argv=None):
             p.relative_to(source).as_posix(): sha256_file(p) for p in source.rglob("*.py")
         },
         "schema_sha256": sha256_file(ROOT / "scenario.schema.json"),
+        # Which framework revision and approval policy produced these results.
+        "hermes": hermes_provenance(find_hermes_root(args.hermes_root))
+        if args.agent_kind == "hermes"
+        else None,
+        "hermes_approval": args.hermes_approval if args.agent_kind == "hermes" else None,
+        "suite_file": {
+            "path": str(Path(args.suite_file).resolve()),
+            "sha256": sha256_file(Path(args.suite_file)),
+            "name": suite_file.get("name"),
+        }
+        if args.suite_file
+        else None,
         "prices": prices,
         "order_seed": args.order_seed,
         "status": "running",
@@ -375,6 +415,7 @@ def main(argv=None):
                     "recursion_limit": args.recursion_limit,
                     "memory_flush_timeout": args.memory_flush_timeout,
                     "hermes_root": args.hermes_root,
+                    "hermes_approval": args.hermes_approval,
                     "max_iterations": args.max_iterations,
                     "request_interval": args.request_interval,
                     "run_id": run_id,

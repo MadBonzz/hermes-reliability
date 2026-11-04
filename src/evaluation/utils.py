@@ -66,9 +66,11 @@ def load_eval_config(env_path):
     return config
 
 
-def load_hermes(root: str | None = None) -> Path:
-    """Resolve CLI/environment overrides BEFORE importing any Hermes modules."""
-    global REPO_ROOT, model_tools, toolsets, registry, AIAgent
+HERMES_APPROVAL_MODES = ("auto", "gate")
+
+
+def find_hermes_root(root: str | None = None) -> Path | None:
+    """Locate the Hermes checkout without importing it (None when absent)."""
     explicit = root or os.environ.get("HERMES_AGENT_ROOT")
     candidates = (
         [Path(explicit)]
@@ -79,7 +81,30 @@ def load_hermes(root: str | None = None) -> Path:
             Path.home() / "AppData/Local/hermes/hermes-agent",
         ]
     )
-    selected = next((p.resolve() for p in candidates if (p / "run_agent.py").is_file()), None)
+    return next((p.resolve() for p in candidates if (p / "run_agent.py").is_file()), None)
+
+
+def apply_hermes_approval(mode: str = "auto") -> None:
+    """Set Hermes's approval environment for unattended runs.
+
+    auto: HERMES_AUTO_APPROVE=1, so Hermes approves actions it would normally
+    ask about. Its approval gate is NOT exercised (historical default).
+    gate: auto-approve is left unset, so Hermes's own approval gate decides.
+    Both keep HERMES_NON_INTERACTIVE=1 so a run never waits for a human.
+    """
+    if mode not in HERMES_APPROVAL_MODES:
+        raise ValueError(f"Unknown Hermes approval mode: {mode!r}")
+    os.environ["HERMES_NON_INTERACTIVE"] = "1"
+    if mode == "auto":
+        os.environ["HERMES_AUTO_APPROVE"] = "1"
+    else:
+        os.environ.pop("HERMES_AUTO_APPROVE", None)
+
+
+def load_hermes(root: str | None = None, approval: str = "auto") -> Path:
+    """Resolve CLI/environment overrides BEFORE importing any Hermes modules."""
+    global REPO_ROOT, model_tools, toolsets, registry, AIAgent
+    selected = find_hermes_root(root)
     if selected is None:
         raise RuntimeError("Hermes checkout not found; set --hermes-root or HERMES_AGENT_ROOT")
     if REPO_ROOT is not None:
@@ -87,8 +112,7 @@ def load_hermes(root: str | None = None) -> Path:
             raise RuntimeError("Cannot switch Hermes checkouts within an imported process")
         return REPO_ROOT
     sys.path.insert(0, str(selected))
-    os.environ["HERMES_AUTO_APPROVE"] = "1"
-    os.environ["HERMES_NON_INTERACTIVE"] = "1"
+    apply_hermes_approval(approval)
     model_tools = importlib.import_module("model_tools")
     toolsets = importlib.import_module("toolsets")
     registry = importlib.import_module("tools.registry").registry

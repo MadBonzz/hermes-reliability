@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import subprocess
 import threading
 import time
 import uuid
@@ -135,3 +136,35 @@ def workspace_manifest(workspace):
                     pass
             result[path.relative_to(workspace).as_posix()] = item
     return result
+
+
+def _git(root, *args):
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def hermes_provenance(root):
+    """Which Hermes revision a run used, so results can be placed on a version timeline.
+
+    Values are None when the checkout is missing or is not a git repository.
+    `dirty` is True when tracked files differ from the commit.
+    """
+    if root is None:
+        return {"path": None, "commit": None, "describe": None, "dirty": None}
+    root = Path(root)
+    status = _git(root, "status", "--porcelain", "--untracked-files=no")
+    return {
+        "path": str(root),
+        "commit": _git(root, "rev-parse", "HEAD"),
+        "describe": _git(root, "describe", "--tags", "--always", "--dirty"),
+        "dirty": None if status is None else bool(status),
+    }
