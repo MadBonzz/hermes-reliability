@@ -14,6 +14,7 @@ DEFAULT_SUITE_NAME = "Agent Software & Distributed Systems Suite"
 def reference_tool_names(runtime_kind="hermes"):
     """Static profile names; real registration and argument checks run in preflight."""
     profiles = {
+        "custom": set(),
         "hermes": {"read_file", "write_file", "patch", "search_files", "terminal"},
         "openhands": {"file_editor", "terminal", "task_tracker", "finish"},
         "deerflow": {
@@ -50,7 +51,14 @@ def external_schema_ref(value):
     return False
 
 
-def load_scenarios(source, schema_path, suite_name=DEFAULT_SUITE_NAME, *, runtime_kind="hermes"):
+def load_scenarios(
+    source,
+    schema_path,
+    suite_name=DEFAULT_SUITE_NAME,
+    *,
+    runtime_kind="hermes",
+    reference_tools=None,
+):
     """Load a directory in filename order, or one standalone scenario JSON."""
     source = Path(source).resolve()
     if source.is_dir():
@@ -69,7 +77,13 @@ def load_scenarios(source, schema_path, suite_name=DEFAULT_SUITE_NAME, *, runtim
         raw = path.read_bytes()
         try:
             scenario = json.loads(raw.decode("utf-8-sig"))
-            _validate_scenario(scenario, validator, seen, runtime_kind=runtime_kind)
+            _validate_scenario(
+                scenario,
+                validator,
+                seen,
+                runtime_kind=runtime_kind,
+                reference_tools=reference_tools,
+            )
         except (ValueError, TypeError) as exc:
             raise ValueError(f"Invalid scenario file {path}: {exc}") from exc
         scenarios.append(scenario)
@@ -112,7 +126,7 @@ def _validate_suite_header(suite):
         raise ValueError("Scenario suite must contain at least one scenario")
 
 
-def _validate_scenario(scenario, validator, seen, *, runtime_kind="hermes"):
+def _validate_scenario(scenario, validator, seen, *, runtime_kind="hermes", reference_tools=None):
     """Check one definition, including IDs already encountered in this suite."""
     error = next(validator.iter_errors(scenario), None)
     if error is not None:
@@ -191,8 +205,14 @@ def _validate_scenario(scenario, validator, seen, *, runtime_kind="hermes"):
                 ast.parse(check["python"], filename=f"{sid}/{check['name']}")
         reference = turn.get("reference")
         if reference:
-            allowed_reference = reference_tool_names(runtime_kind) | set(names)
+            allowed_reference = (
+                reference_tool_names(runtime_kind) | set(names) | set(reference_tools or [])
+            )
             for action in reference["actions"]:
+                if runtime_kind == "custom" and reference_tools is None:
+                    # Source-only design can propose native names. Execution must
+                    # validate them against the custom adapter's declared catalog.
+                    continue
                 if action["tool"] not in allowed_reference:
                     raise ValueError(f"{sid}: unknown reference tool {action['tool']}")
         for group in ("state_checks", "pre_turn_perturbations", "post_turn_cleanup"):
@@ -206,10 +226,12 @@ def _validate_scenario(scenario, validator, seen, *, runtime_kind="hermes"):
             raise ValueError(f"{sid}: expected workspace-relative path, got {path!r}")
 
 
-def validate_suite(suite, schema_path, *, runtime_kind="hermes"):
+def validate_suite(suite, schema_path, *, runtime_kind="hermes", reference_tools=None):
     """Validate an in-memory collection against the standalone scenario schema."""
     _validate_suite_header(suite)
     validator = _load_validator(schema_path)
     seen = set()
     for scenario in suite["scenarios"]:
-        _validate_scenario(scenario, validator, seen, runtime_kind=runtime_kind)
+        _validate_scenario(
+            scenario, validator, seen, runtime_kind=runtime_kind, reference_tools=reference_tools
+        )

@@ -279,6 +279,7 @@ class DashboardTests(TemporaryDirectoryTestCase):
 
         config = {
             "scope": "test",
+            "dataset_discovery": {"enabled": False},
             "source": {},
             "orchestrator": {},
             "target": {},

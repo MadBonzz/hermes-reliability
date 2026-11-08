@@ -69,9 +69,10 @@ function renderSidebar() {
   if (!campaigns.length) empty($("campaign-list"), "Your campaigns will appear here.");
 }
 
-const phases = [["source", "Inspect source"], ["generation", "Generate"], ["preflight", "Validate"], ["review", "Review"], ["execution", "Execute"], ["analysis", "Analyze"]];
+const phases = [["source", "Inspect source"], ["datasets", "Find datasets"], ["generation", "Generate"], ["preflight", "Validate"], ["review", "Review"], ["execution", "Execute"], ["analysis", "Analyze"]];
 const descriptions = {
   source: "Preparing the pinned source checkout and its architecture index.",
+  datasets: "Selecting relevant workload datasets and recording source cards, user samples, and access limits.",
   generation: "The orchestrator inspects source, proposes scenarios, and edits the active suite.",
   preflight: "Checking scenario contracts, authored reference actions, and evaluator tests.",
   review: "Independent reviewers examine task quality, experimental validity, and verification.",
@@ -156,6 +157,7 @@ function renderCampaign(detail) {
     $("iterations").append(row);
   }
   if (!detail.rounds.length) empty($("iterations"), "The first generation starts after source preparation.");
+  renderDatasets(detail.datasets || {});
   renderTests(detail.tests);
   $("round-select").replaceChildren(...detail.rounds.map((round) => new Option("Round " + round.number, round.number)));
   selectedRound = selectedRound || last?.number;
@@ -349,12 +351,34 @@ function showTest(test) {
   $("test-dialog").showModal();
 }
 
+function renderDatasets(manifest) {
+  $("dataset-status").textContent = (manifest.status || "not recorded").replaceAll("_", " ");
+  $("dataset-sources").replaceChildren();
+  for (const source of manifest.sources || []) {
+    const card = node("article", null, "panel");
+    const link = node("a", source.id);
+    if (/^https:\/\/(huggingface\.co|zenodo\.org)\//.test(source.url || "")) {
+      link.href = source.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
+    card.append(link, node("p", source.reason), badge(source.sample_status));
+    card.append(node("p", `${source.samples?.length || 0} user excerpts · ${source.provider}`, "muted"));
+    if (source.gated) card.append(node("p", "Gated source: sample access depends on your Hugging Face permissions.", "muted"));
+    if (source.errors?.length) card.append(node("p", "Some source requests were unavailable; details are retained in the dataset manifest.", "muted"));
+    $("dataset-sources").append(card);
+  }
+  if (!(manifest.sources || []).length) empty($("dataset-sources"), manifest.error || manifest.reason || "Dataset sources will appear after discovery. Earlier campaigns may not record them.");
+}
+
 function updateSetup() {
   const runtime = $("runtime").value;
   $("source").value = defaults.repositories?.[runtime] || "";
   $("python").value = defaults.runtimes?.[runtime]?.python || defaults.python || "";
   $("runtime-image").value = defaults.runtimes?.[runtime]?.runtime_image || "";
-  $("image-label").hidden = runtime === "hermes";
+  $("image-label").hidden = !["openhands", "deerflow"].includes(runtime);
+  $("factory-label").hidden = runtime !== "custom";
+  if (runtime === "custom" && !$("adapter-factory").value.trim()) $("execute").checked = false;
   $("base-revision").disabled = runtime !== "hermes";
   $("approval").disabled = runtime !== "hermes";
   updatePrior();
@@ -390,6 +414,7 @@ $("setup-form").onsubmit = async (event) => {
   try {
     const result = await api("/api/start", {
       runtime: $("runtime").value, source: $("source").value, revision: $("revision").value,
+      adapter_factory: $("adapter-factory").value,
       python: $("python").value, runtime_image: $("runtime-image").value,
       orchestrator: model("orch"), target: model("target"), scope: $("scope").value,
       limits: {rounds: Number($("rounds").value), generations: Number($("generations").value), initial_tests: Number($("initial-tests").value), active_tests: Number($("active-tests").value)},
@@ -399,7 +424,7 @@ $("setup-form").onsubmit = async (event) => {
     pendingJob = result.id;
     launchError = null;
     $("setup").close();
-    banner("Campaign launched. Cloning and pinning the source checkout…");
+    banner("Campaign launched. Preparing a private source snapshot…");
     await refresh();
   } catch (error) {
     $("form-error").textContent = error.message;

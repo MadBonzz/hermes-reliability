@@ -20,7 +20,7 @@ properties. Their names express the intended capability, not a proof that a pass
 establishes a general systems or security guarantee.
 
 The evaluated system consists of the **model, serving API/tool protocol, and
-selected agent runtime together** (Hermes, OpenHands or DeerFlow). The harness
+selected agent runtime together** (built-in Hermes, OpenHands or DeerFlow, or a configured custom adapter). The harness
 supplies the tasks, faults, mocks, and scoring. A poor result can expose an agent-system failure, an evaluation defect,
 or both. Distinguish those using evidence rather than assigning all failures to
 the model by default.
@@ -99,6 +99,8 @@ format; it is not a selectable legacy execution mode.
 | `src/orchestrator/prompts.py` | Authored main/review/analysis instructions and response-repair feedback; import these rather than embedding prompts in runtime code. |
 | `src/orchestrator/findings.py` | Cached dashboard presentation of causal analyses, with schema/source-coverage validation and separate API usage. |
 | `src/orchestrator/runner.py` | Separate generation/review/execution/analysis loop and indexed evidence access. |
+| `src/orchestrator/datasets.py`, `src/orchestrator/source.py` | Pre-generation workload discovery, bounded source excerpts/provenance, and Git/local-code snapshots. |
+| `src/orchestrator/custom_adapter.py` | Trusted user-supplied execution integrations for arbitrary agent frameworks; design-only mode needs no factory. |
 | `src/orchestrator/app.py`, `src/orchestrator/dashboard.py`, `src/orchestrator/web/` | Local dashboard, frozen background launches, evidence presentation and earlier-suite selection. |
 | `src/orchestrator/adapters.py`, `src/orchestrator/hermes_worker.py` | Trusted command-adapter contract and fresh-process Hermes bridge. |
 | `src/evaluation/agent_container.py`, `src/evaluation/agent_worker.py`, `src/evaluation/native_agent_bridges.py` | Isolated native OpenHands/DeerFlow runtimes and inference/mock relay. |

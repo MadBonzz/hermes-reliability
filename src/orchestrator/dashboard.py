@@ -55,7 +55,7 @@ class Catalog:
             state = read_json(path / "campaign.json", {})
             progress = read_json(path / "progress.json", {})
             phase = progress.get("phase", "saved")
-            if phase in {"terminal", "saved"}:
+            if phase in {"terminal", "saved"} and state.get("stop_reason") != "generated_only":
                 if state.get("stop_reason") not in {
                     "orchestrator_converged",
                     "execution_round_limit",
@@ -165,6 +165,7 @@ class Catalog:
             "source": config.get("source", {}),
             "limits": config.get("limits", {}),
             "progress": read_json(path / "progress.json", {}),
+            "datasets": read_json(path / "datasets/manifest.json", {}),
             "error": state.get("error"),
             "stop_reason": state.get("stop_reason"),
             "preemption_reason": state.get("preemption_reason"),

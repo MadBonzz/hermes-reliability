@@ -19,6 +19,7 @@ from src.evaluation.runtime_support import write_json_atomic
 from src.evaluation.utils import load_eval_config
 from src.orchestrator.dashboard import Catalog, identity, read_json
 from src.orchestrator.findings import FindingsWorker, exclusive, inputs
+from src.orchestrator.source import is_git, snapshot_directory
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "eval_harness/orchestrator"
@@ -50,14 +51,17 @@ def connection(value, role):
 
 def validate_request(value, catalog):
     kind = value.get("runtime", "hermes")
-    if kind not in REPOSITORIES:
-        raise ValueError("Choose Hermes, OpenHands or DeerFlow")
+    if kind not in {*REPOSITORIES, "custom"}:
+        raise ValueError("Choose a built-in runtime or Custom agent")
+    execute = value.get("execute", True)
+    if type(execute) is not bool:
+        raise ValueError("Provide a boolean execution setting")
     source = str(value.get("source", "")).strip()
     if not source or source.startswith("-"):
-        raise ValueError("Provide a repository URL or local Git checkout")
+        raise ValueError("Provide a repository URL or local source directory")
     if not Path(source).is_dir() and urlparse(source).scheme not in {"http", "https"}:
         raise ValueError(
-            "Source must be an HTTP(S) repository URL or an existing local Git checkout"
+            "Source must be an HTTP(S) repository URL or an existing local source directory"
         )
     limits = value.get("limits", {})
     for key, default, maximum in (
@@ -74,7 +78,7 @@ def validate_request(value, catalog):
     orchestrator = connection(value.get("orchestrator"), "orchestrator")
     target = connection(value.get("target"), "target")
     environment = load_eval_config(ROOT / ".env")
-    for spec in (orchestrator, target):
+    for spec in (orchestrator, target) if execute else (orchestrator,):
         if not environment.get(spec["api_key_env"]):
             raise ValueError(
                 f"Set {spec['api_key_env']} in .env or the shell. Local APIs may use a placeholder value."
@@ -87,19 +91,39 @@ def validate_request(value, catalog):
     }
     if not Path(adapter["python"]).is_file() and not shutil.which(adapter["python"]):
         raise ValueError("Select an installed Python executable for the runtime")
-    if kind != "hermes":
+    if kind in {"openhands", "deerflow"}:
         adapter.update(
             runtime_image=str(value.get("runtime_image", "")).strip(),
             recursion_limit=100,
             memory_flush_timeout=600,
         )
-        if not adapter["runtime_image"] or adapter["runtime_image"].startswith("-"):
+        if execute and (not adapter["runtime_image"] or adapter["runtime_image"].startswith("-")):
             raise ValueError("Provide the built native Docker image tag or digest")
-    else:
+    elif kind == "hermes":
         approval = value.get("hermes_approval", "auto")
         if approval not in {"auto", "gate"}:
             raise ValueError("Unknown approval mode")
         adapter["hermes_approval"] = approval
+    else:
+        factory = str(value.get("adapter_factory", "")).strip()
+        if factory:
+            filename, separator, function = factory.rpartition(":")
+            path = Path(filename)
+            if (
+                not separator
+                or not path.is_absolute()
+                or not path.is_file()
+                or path.suffix != ".py"
+                or not function.isidentifier()
+            ):
+                raise ValueError(
+                    "Custom adapter factory must be /absolute/path/adapter.py:create_adapter"
+                )
+            adapter["factory"] = str(path.resolve()) + ":" + function
+        elif execute:
+            raise ValueError(
+                "Provide a custom adapter factory to execute, or uncheck Execute generated tests for scenario design"
+            )
     config = {
         "scope": str(
             value.get(
@@ -114,7 +138,8 @@ def validate_request(value, catalog):
         "adapter": adapter,
         "limits": limits,
         "prompt_variant": "architecture_first_v3",
-        "execute": value.get("execute", True),
+        "execute": execute,
+        "dataset_discovery": {"enabled": True},
     }
     if type(config["execute"]) is not bool or not config["scope"]:
         raise ValueError("Provide a scope and boolean execution setting")
@@ -139,6 +164,18 @@ def resolve_source(config, folder):
     requested = config.pop("requested_revision", "")
     destination = folder / "agent_source"
     local = Path(location).is_dir()
+    if local and (
+        not is_git(location) or (config["adapter"]["kind"] == "custom" and not requested)
+    ):
+        if requested or config.get("requested_base"):
+            raise ValueError("Revision selection requires a Git repository")
+        if config.get("execute") and config["adapter"]["kind"] != "custom":
+            raise ValueError("Built-in execution requires a pinned Git checkout")
+        config["source"] = snapshot_directory(location, destination)
+        previous = config.pop("previous_source", None)
+        if previous and previous["repository"] != config["source"]["repository"]:
+            raise ValueError("Saved tests belong to a different source directory")
+        return config
     if local:
         location = str(Path(location).resolve())
         if git("-C", location, "status", "--porcelain", "--untracked-files=no"):
@@ -150,7 +187,7 @@ def resolve_source(config, folder):
             repository = Path(location).as_uri()
     else:
         repository, revision = location, requested
-    if config["adapter"]["kind"] != "hermes":
+    if config["adapter"]["kind"] in {"openhands", "deerflow"} and config.get("execute", True):
         image = json.loads(
             subprocess.check_output(
                 ["docker", "image", "inspect", config["adapter"]["runtime_image"]], text=True
@@ -212,7 +249,11 @@ def launch(config, root=DATA):
     env = os.environ.copy()
     values = load_eval_config(ROOT / ".env")
     for spec in (config["orchestrator"], config["target"]):
-        env[spec["api_key_env"]] = values[spec["api_key_env"]]
+        if values.get(spec["api_key_env"]):
+            env[spec["api_key_env"]] = values[spec["api_key_env"]]
+    dataset_key_env = config.get("dataset_discovery", {}).get("api_key_env", "HF_TOKEN")
+    if values.get(dataset_key_env):
+        env[dataset_key_env] = values[dataset_key_env]
     env["PYTHONUNBUFFERED"] = "1"
     try:
         with (folder / "worker.log").open("w", encoding="utf-8") as log:
@@ -262,6 +303,9 @@ def worker(folder):
         keys = [
             os.environ.get(config[role]["api_key_env"], "") for role in ("orchestrator", "target")
         ]
+        keys.append(
+            os.environ.get(config.get("dataset_discovery", {}).get("api_key_env", "HF_TOKEN"), "")
+        )
         detail = getattr(exc, "stderr", None) or str(exc)
         state.update(status="error", error=SecretRedactor(keys)(f"{type(exc).__name__}: {detail}"))
     finally:

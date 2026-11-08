@@ -410,6 +410,7 @@ class Workspace:
             self.schema,
             require_portable_prefix=False,
             runtime_kind=getattr(self, "runtime_kind", "hermes"),
+            reference_tools=getattr(self, "reference_tools", None),
         )
         for case in cases:
             experiment = case.get("experiment", {})

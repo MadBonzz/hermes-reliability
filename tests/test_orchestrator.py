@@ -589,6 +589,7 @@ class OrchestratorTests(unittest.TestCase):
             working.snapshot(stage / "candidate")
             config = {
                 "scope": "test",
+                "dataset_discovery": {"enabled": False},
                 "source": {},
                 "target": {},
                 "adapter": {},
@@ -743,6 +744,7 @@ class OrchestratorTests(unittest.TestCase):
             Workspace(prior / "trusted", ROOT)
             config = {
                 "scope": "test",
+                "dataset_discovery": {"enabled": False},
                 "source": {},
                 "target": {},
                 "adapter": {},
@@ -974,6 +976,7 @@ class OrchestratorTests(unittest.TestCase):
 
             config = {
                 "scope": "test",
+                "dataset_discovery": {"enabled": False},
                 "source": {},
                 "orchestrator": {},
                 "target": {},
@@ -1236,6 +1239,7 @@ class OrchestratorTests(unittest.TestCase):
 
             config = {
                 "scope": "test",
+                "dataset_discovery": {"enabled": False},
                 "source": {},
                 "orchestrator": {},
                 "target": {},
