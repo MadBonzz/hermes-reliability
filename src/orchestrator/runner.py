@@ -13,21 +13,21 @@ from pathlib import Path
 
 import httpx
 
-from src.evaluation.api_trace import SecretRedactor
-from src.evaluation.audit import audit_campaign
-from src.evaluation.differential import compare as differential_compare
-from src.evaluation.differential import markdown as differential_markdown
-from src.evaluation.evaluation_metrics import api_metrics
-from src.evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
-from src.evaluation.utils import load_eval_config
-from src.orchestrator.adapters import ROOT, make_adapter, revision_hashes
-from src.orchestrator.datasets import (
+from ..evaluation.api_trace import SecretRedactor
+from ..evaluation.audit import audit_campaign
+from ..evaluation.differential import compare as differential_compare
+from ..evaluation.differential import markdown as differential_markdown
+from ..evaluation.evaluation_metrics import api_metrics
+from ..evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
+from ..evaluation.utils import load_eval_config
+from .adapters import ROOT, make_adapter, revision_hashes
+from .datasets import (
     discover,
     recovered_manifest,
     validate_profile,
     validate_selection,
 )
-from src.orchestrator.prompts import (
+from .prompts import (
     ANALYSIS_REQUIREMENTS,
     ANALYSIS_TASK,
     DATASET_PROFILE_TASK,
@@ -50,7 +50,7 @@ from src.orchestrator.prompts import (
     review_task,
     variant_context,
 )
-from src.orchestrator.quality import (
+from .quality import (
     validate_analysis,
     validate_assessments,
     validate_dataset_grounding,
@@ -60,17 +60,17 @@ from src.orchestrator.quality import (
     validate_stopping,
     validate_version_plan,
 )
-from src.orchestrator.regression_index import lookup as index_lookup
-from src.orchestrator.regression_index import record as index_record
-from src.orchestrator.source import (
+from .regression_index import lookup as index_lookup
+from .regression_index import record as index_record
+from .source import (
     is_git,
     read_source,
     snapshot_directory,
     source_files,
     verify_snapshot,
 )
-from src.orchestrator.transcripts import export_execution
-from src.orchestrator.workspace import Workspace
+from .transcripts import export_execution
+from .workspace import Workspace
 
 
 def canonical(value):
@@ -980,6 +980,7 @@ def run(
     execute=False,
     on_created=None,
     dataset_discoverer=None,
+    credential_values=None,
 ):
     if {"resume_final_execution_from", "recovery_evaluator_repairs"}.intersection(config):
         raise ValueError(
@@ -1004,7 +1005,8 @@ def run(
         experiment = artifact_root / f"{kind}_{stamp}_{attempt[:8]}"
     output = experiment / "attempts" / attempt
     output.mkdir(parents=True)
-    values = load_eval_config(ROOT / ".env")
+    # Plugin callers supply only host-scoped secrets; never read profile files.
+    values = load_eval_config(ROOT / ".env") if credential_values is None else credential_values
     orch_key = values.get(config["orchestrator"].get("api_key_env", ""), "")
     target_key = values.get(config["target"].get("api_key_env", ""), "")
     dataset_key = values.get(config.get("dataset_discovery", {}).get("api_key_env", "HF_TOKEN"), "")

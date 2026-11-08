@@ -10,8 +10,8 @@ from pathlib import Path
 
 import jsonschema
 
-from src.evaluation.runtime_support import sha256_file
-from src.evaluation.scenario_validation import external_schema_ref, reference_tool_names
+from ..evaluation.runtime_support import sha256_file
+from ..evaluation.scenario_validation import external_schema_ref, reference_tool_names
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -192,7 +192,7 @@ class ContainerAdapter(HermesAdapter):
 
     def inspect_tool_catalog(self, directory, evaluator):
         """Inspect an empty native instance, without inference or task execution."""
-        from src.evaluation.agent_container import AgentContainer
+        from ..evaluation.agent_container import AgentContainer
 
         bridges = ("agent_worker.py", "native_agent_bridges.py")
         hashes = {name: sha256_file(ROOT / "src/evaluation" / name) for name in bridges}
@@ -314,7 +314,7 @@ class ContainerAdapter(HermesAdapter):
         ]
 
     def validation_environment(self):
-        from src.evaluation.utils import load_eval_config
+        from ..evaluation.utils import load_eval_config
 
         environment = {
             k: v for k, v in os.environ.items() if not any(s in k.upper() for s in ("KEY", "TOKEN"))
@@ -356,7 +356,7 @@ class ContainerAdapter(HermesAdapter):
 
 def make_adapter(config):
     if config["kind"] == "custom":
-        from src.orchestrator.custom_adapter import CustomAdapter
+        from .custom_adapter import CustomAdapter
 
         return CustomAdapter(config)
     if config["kind"] == "hermes":

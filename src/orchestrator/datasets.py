@@ -12,8 +12,8 @@ from urllib.parse import quote
 
 import httpx
 
-from src.evaluation.runtime_support import sha256_file, write_json_atomic
-from src.orchestrator.prompts import DATASET_GUIDANCE
+from ..evaluation.runtime_support import sha256_file, write_json_atomic
+from .prompts import DATASET_GUIDANCE
 
 CURATED = {
     "hermes": ["AssistantBench/AssistantBench", "McGill-NLP/WebLINX"],

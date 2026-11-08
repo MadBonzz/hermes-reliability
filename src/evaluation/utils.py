@@ -42,27 +42,12 @@ def hermes_run_environment(home):
             os.environ["HERMES_HOME"] = previous
 
 
-def load_eval_config(env_path):
-    """Read only the requested .env; shell variables win without mutating them."""
-    try:
-        from dotenv import dotenv_values
-    except ImportError as exc:
-        raise RuntimeError(
-            "Run uv sync at the repository root; for an activated Hermes environment, use uv sync --active --inexact"
-        ) from exc
-    values = dotenv_values(env_path, encoding="utf-8-sig", interpolate=False)
-    config = {}
-    for layer in (values, os.environ):
-        normalized = {key: value for key, value in layer.items() if value is not None}
-        # Normalize each layer before merging so even a legacy shell variable
-        # overrides a generic .env value. Generic names win within one layer.
-        for legacy, generic in (
-            ("LM_STUDIO_URL", "EVAL_BASE_URL"),
-            ("LM_STUDIO_API_KEY", "EVAL_API_KEY"),
-        ):
-            if legacy in normalized:
-                normalized.setdefault(generic, normalized[legacy])
-        config.update(normalized)
+def load_eval_config(env_path=None):
+    """Target-worker compatibility: environment only; Hermes owns secret files."""
+    config = dict(os.environ)
+    for legacy, generic in (("LM_STUDIO_URL", "EVAL_BASE_URL"), ("LM_STUDIO_API_KEY", "EVAL_API_KEY")):
+        if legacy in config:
+            config.setdefault(generic, config[legacy])
     return config
 
 

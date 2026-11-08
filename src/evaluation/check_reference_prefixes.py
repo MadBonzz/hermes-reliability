@@ -10,11 +10,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation import hermes_runner, utils
-from src.evaluation.runtime_support import write_json_atomic
-from src.evaluation.scenario_validation import load_scenarios
+from . import hermes_runner, utils
+from .runtime_support import write_json_atomic
+from .scenario_validation import load_scenarios
 
 
 def main():

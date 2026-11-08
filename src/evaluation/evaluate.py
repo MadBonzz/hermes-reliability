@@ -16,18 +16,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation.benchmark import condition_spec, validate_benchmark, validate_prefix
-from src.evaluation.evaluation_metrics import load_prices
-from src.evaluation.runtime_support import (
+from .benchmark import condition_spec, validate_benchmark, validate_prefix
+from .evaluation_metrics import load_prices
+from .runtime_support import (
     hermes_provenance,
     sha256_file,
     workspace_manifest,
     write_json_atomic,
 )
-from src.evaluation.scenario_validation import DEFAULT_SUITE_NAME, load_scenarios, suite_sha256
-from src.evaluation.utils import HERMES_APPROVAL_MODES, find_hermes_root, load_eval_config
+from .scenario_validation import DEFAULT_SUITE_NAME, load_scenarios, suite_sha256
+from .utils import HERMES_APPROVAL_MODES, find_hermes_root, load_eval_config
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -446,7 +447,7 @@ def main(argv=None):
         summary.update(status="error", error=f"{type(exc).__name__}: {exc}")
     finally:
         write_json_atomic(out / "report.json", summary)
-    from src.evaluation.analyze import analyze
+    from .analyze import analyze
 
     analyze(out / "report.json")
     print(f"Report: {out / 'report.json'}")

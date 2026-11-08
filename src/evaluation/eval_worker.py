@@ -9,15 +9,16 @@ from importlib.metadata import distributions
 from pathlib import Path
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation import utils
-from src.evaluation.api_trace import RequestPacer, SecretRedactor
-from src.evaluation.benchmark import visible_input_validator
-from src.evaluation.evaluation_metrics import efficiency, injection_evidence
-from src.evaluation.execution_isolation import isolated_python
-from src.evaluation.hermes_runner import run_single_scenario
-from src.evaluation.runtime_support import workspace_manifest, write_json_atomic
+from . import utils
+from .api_trace import RequestPacer, SecretRedactor
+from .benchmark import visible_input_validator
+from .evaluation_metrics import efficiency, injection_evidence
+from .execution_isolation import isolated_python
+from .hermes_runner import run_single_scenario
+from .runtime_support import workspace_manifest, write_json_atomic
 
 
 def execute(config):

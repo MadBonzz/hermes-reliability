@@ -117,9 +117,3 @@ class SuiteFileTests(TemporaryDirectoryTestCase):
             evaluate.main(["--output", str(output), "--suite-file", str(suite)])
         self.assertEqual(2, stopped.exception.code)
         self.assertFalse(output.exists())
-
-    def test_repository_core_suite_lists_existing_scenarios(self):
-        suite = json.loads((evaluate.ROOT / "suites/core_v1.json").read_text())
-        names = {p.stem for p in (evaluate.ROOT / "scenarios").glob("*.json")}
-        self.assertEqual(len(suite["scenario_ids"]), len(set(suite["scenario_ids"])))
-        self.assertLessEqual(set(suite["scenario_ids"]), names)

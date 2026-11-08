@@ -37,7 +37,7 @@ def validate_revision():
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             with utils.hermes_run_environment(root / "profile"):
-                utils.load_hermes(args.hermes_root)
+                utils.load_hermes(args.hermes_root, approval="gate")
 
                 def agent(*args, **kwargs):
                     tools = utils.model_tools.get_tool_definitions(

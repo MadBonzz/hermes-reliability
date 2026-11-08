@@ -4,7 +4,7 @@ import copy
 import json
 import re
 
-from src.evaluation.scenario_validation import validate_suite
+from .scenario_validation import validate_suite
 
 
 def condition_spec(spec, condition):

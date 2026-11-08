@@ -2,20 +2,20 @@
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 
 from src.evaluation.runtime_support import write_json_atomic
-from src.orchestrator import app
 from src.orchestrator.adapters import make_adapter
 from src.orchestrator.dashboard import Catalog, identity
 from src.orchestrator.datasets import discover
 from src.orchestrator.runner import prepare_source, run
 from src.orchestrator.source import read_source, snapshot_directory, verify_snapshot
 from src.orchestrator.workspace import Workspace
+from src.plugin import source as app
+from src.plugin.service import Service
 from tests.helpers import TemporaryDirectoryTestCase
 from tests.test_dataset_discovery import catalogue_response
 from tests.test_orchestrator import ROOT, case
@@ -44,6 +44,7 @@ class CustomAgentTests(TemporaryDirectoryTestCase):
 
     def test_directory_snapshot_includes_working_code_and_excludes_secrets_and_links(self):
         source = self.source()
+        (source / "agent.ts").chmod(0o755)
         (source / ".env").write_text("PRIVATE=secret")
         (source / "node_modules").mkdir()
         (source / "node_modules/dependency.js").write_text("external dependency")
@@ -52,6 +53,7 @@ class CustomAgentTests(TemporaryDirectoryTestCase):
         (source / "linked.py").symlink_to(outside)
         config = snapshot_directory(source, self.root / "snapshot")
         frozen = verify_snapshot(config)
+        self.assertEqual(0o755, (frozen / "agent.ts").stat().st_mode & 0o777)
         self.assertEqual({"agent.ts", "README.md"}, set(config["sha256"]))
         self.assertEqual(
             (source / "agent.ts").read_text(), read_source(frozen, "agent.ts").read_text()
@@ -98,32 +100,13 @@ class CustomAgentTests(TemporaryDirectoryTestCase):
 
     def test_dashboard_custom_design_needs_no_image_factory_or_target_secret(self):
         source = self.source()
-        request = {
-            "runtime": "custom",
-            "source": str(source),
-            "execute": False,
-            "python": sys.executable,
-            "orchestrator": {
-                "base_url": "http://localhost:1234/v1",
-                "model": "planner",
-                "api_key_env": "PLAN_KEY",
-            },
-            "target": {
-                "base_url": "http://localhost:1234/v1",
-                "model": "target",
-                "api_key_env": "TARGET_KEY",
-            },
-        }
-        with patch.object(
-            app, "load_eval_config", return_value={"PLAN_KEY": "private", "TARGET_KEY": "target"}
-        ):
-            config = app.validate_request(request, Catalog(self.root))
-            self.assertNotIn("runtime_image", config["adapter"])
-            self.assertTrue(config["dataset_discovery"]["enabled"])
-            with self.assertRaisesRegex(ValueError, "adapter factory"):
-                app.validate_request({**request, "execute": True}, Catalog(self.root))
-        with patch.object(app, "load_eval_config", return_value={"PLAN_KEY": "private"}):
-            app.validate_request(request, Catalog(self.root))
+        request = {"runtime": "custom", "source": str(source), "execute": False}
+        service = Service(self.root, options={})
+        config = service.validate(request)
+        self.assertNotIn("runtime_image", config["adapter"])
+        self.assertTrue(config["dataset_discovery"]["enabled"])
+        with self.assertRaisesRegex(ValueError, "execution_enabled"):
+            service.validate({**request, "execute": True})
 
     def test_custom_source_discovery_precedes_generation_and_reaches_reviewers(self):
         source = self.source()

@@ -21,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 TIERS = ("state", "process", "output")

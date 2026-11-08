@@ -8,11 +8,11 @@ import json
 
 import jsonschema
 
-from src.evaluation.audit_api_evidence import reconstruct_responses
-from src.evaluation.control_observer import control_coverage
-from src.evaluation.mock_services import json_equal
-from src.evaluation.scenario_validation import external_schema_ref
-from src.evaluation.utils import unwrap_tool_call
+from .audit_api_evidence import reconstruct_responses
+from .control_observer import control_coverage
+from .mock_services import json_equal
+from .scenario_validation import external_schema_ref
+from .utils import unwrap_tool_call
 
 
 def decode(value):

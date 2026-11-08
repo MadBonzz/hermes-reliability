@@ -17,8 +17,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.evaluation.differential import report_summary
-from src.evaluation.runtime_support import sha256_file, write_json_atomic
+from ..evaluation.differential import report_summary
+from ..evaluation.runtime_support import sha256_file, write_json_atomic
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INDEX = ROOT / "eval_harness/regression_index.json"

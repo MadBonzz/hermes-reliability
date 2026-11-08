@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from src.evaluation.runtime_support import sha256_file
+from ..evaluation.runtime_support import sha256_file
 
 EXCLUDED = {
     ".git",
@@ -104,7 +104,7 @@ def snapshot_directory(location, destination):
         before = sha256_file(source)
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
+        shutil.copy2(source, target)
         if sha256_file(target) != before or sha256_file(source) != before:
             raise ValueError(f"Source changed during snapshot: {name}")
         hashes[name] = before

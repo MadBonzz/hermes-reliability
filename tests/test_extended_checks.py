@@ -1,9 +1,7 @@
 import hashlib
 import json
-from pathlib import Path
 
 from src.evaluation.checks import (
-    evaluate_output_checks,
     evaluate_process_checks,
     evaluate_state_checks,
 )
@@ -134,34 +132,6 @@ class ExtendedCheckTests(TemporaryDirectoryTestCase):
         ):
             path.write_text(content)
             self.assertFalse(self.check(check))
-
-    def test_shipment_scenario_allows_extra_fields_but_rejects_wrong_or_missing_values(self):
-        path = (
-            Path(__file__).resolve().parents[1] / "scenarios/scen_76_sequence_ordered_events.json"
-        )
-        spec = json.loads(path.read_text(encoding="utf-8"))
-        for turn, status, sequence in zip(spec["turns"], ("shipped", "delivered"), (3, 4)):
-            with self.subTest(turn=turn["turn_number"]):
-                expected = {
-                    "shipment_id": "S9",
-                    "current_status": status,
-                    "last_sequence": sequence,
-                }
-                for extra in ({}, {"events": [], "note": "supporting context"}):
-                    self.assertTrue(
-                        evaluate_output_checks(
-                            turn["output_checks"], json.dumps({**expected, **extra})
-                        )[0]
-                    )
-                for key in expected:
-                    invalid = {**expected, key: "incorrect"}
-                    self.assertFalse(
-                        evaluate_output_checks(turn["output_checks"], json.dumps(invalid))[0]
-                    )
-                    del invalid[key]
-                    self.assertFalse(
-                        evaluate_output_checks(turn["output_checks"], json.dumps(invalid))[0]
-                    )
 
     def check(self, check, snapshot=None):
         return evaluate_state_checks([check], self.root, mock_snapshot=snapshot)[0]

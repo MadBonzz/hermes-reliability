@@ -1,304 +1,144 @@
-# Agent Reliability Lab
+# Hermes Reliability Lab
 
-An agent that designs experiments for other agents. Point it at **any agentic system's
-repository or local source directory**, watch it generate and review realistic tasks, then inspect what happened
-when the agent encountered changing state, failed tools, untrusted content, or interrupted work.
+A native **Hermes plugin** that turns an agent repository or local code directory into an evidence-based reliability campaign. It includes the orchestrator, the evaluator machinery needed by generated tests, a Hermes web dashboard tab, and a Desktop page. **The original 109 authored experiments, saved runs, and example campaign exports are not included.**
 
-The local dashboard follows the full loop — source inspection, dataset discovery, scenario generation,
-three independent reviewers, execution, causal analysis, and the next iteration.
-Scenario design and review are framework-independent. **Hermes, OpenHands, and DeerFlow**
-have built-in execution adapters; other systems connect through a custom execution
-adapter. Hermes also supports comparisons between framework revisions.
+This branch is developed privately in Cornell GitHub Enterprise. The original lab and its benchmark remain on their existing branches.
 
-## 1. Install
+## What it does
 
-Requirements are **Python 3.11+**, **Git**, and **uv**. OpenHands and DeerFlow also
-require a running **Docker Engine** with a built runtime image. Hermes uses its own
-installed Python environment.
+1. **Inspect the system.** Freeze a private source snapshot, read its architecture and tool interfaces, and retain source hashes and citations.
+2. **Find realistic workloads.** Select relevant datasets before scenario generation. For unfamiliar agents, a model-assisted source profile guides Hugging Face and Zenodo API searches.
+3. **Build experiments.** Generate scenario JSON, controlled comparisons, assertions, and campaign-local evaluator changes. Validate schema, paths, assertion coverage, and source references.
+4. **Challenge the design.** Separate task-quality, experimental-validity, and verification/attribution reviewers inspect the proposal. Their conversations and judgments are saved independently.
+5. **Execute when configured.** Preflight prerequisite references and run candidate and frozen trusted evaluators against the target. Retain tool traces, service/file state, API evidence, audit results, and revision hashes.
+6. **Explain and iterate.** Analyze cited execution evidence, distinguish agent failures from evaluator defects and missing evidence, and refine within explicit request, generation, test-count, and round budgets.
 
-From your clone of this repository, run
+This is executable orchestration, validation, runtime integration, and evidence storage—not a collection of prompts. Model judgments are still judgments: a passing check or reviewer approval is not a general reliability guarantee. Reaching a generation cap does not mean all reviewers approved; those results remain visible.
 
-```sh
-uv sync --locked
+```mermaid
+flowchart LR
+    A[Repository or local code] --> B[Source snapshot + dataset discovery]
+    B --> C[Scenario and evaluator generation]
+    C --> D[Three independent reviews]
+    D --> E[Mechanical validation]
+    E --> F[Candidate + trusted execution]
+    F --> G[Evidence audit + causal analysis]
+    G --> C
+    G --> H[Hermes dashboard + saved findings]
 ```
 
-To explore the dashboard immediately, run `uv run --locked python -m src.orchestrator.app`
-and open `http://localhost:8765`. It includes three completed example campaigns,
-one each for Hermes, OpenHands and DeerFlow. Viewing these examples requires no API key
-or installed agent runtime. Continue below to launch new experiments.
+## Install in Hermes
 
-Copy `.env.example` to `.env` using your editor or file manager. For the default
-Meta configuration, add
+Use a current Hermes release with native plugins, `ctx.llm`, CLI subcommands, and dashboard extensions. The manifest requires Hermes **0.21.5+**; validation for this build uses upstream commit `acdc8f1ba65c0231ae8277e846a4d55928913991`. Target-runtime compatibility is a separate concern described below.
 
-```dotenv
-META_KEY=your-meta-api-key
+Clone the **plugin branch** into your active profile's plugin directory. Authenticate Git to Cornell in your usual way first:
+
+```bash
+git clone --branch codex/hermes-reliability-plugin --single-branch \
+  https://github.coecis.cornell.edu/sj945/agent-regression.git \
+  "${HERMES_HOME:-$HOME/.hermes}/plugins/hermes-reliability"
+
+hermes plugins enable hermes-reliability
+hermes plugins doctor "${HERMES_HOME:-$HOME/.hermes}/plugins/hermes-reliability" --ci
 ```
 
-The default models are **muse-wonder-1.0** for the orchestrator and all three reviewers,
-and **muse-spark-1.3-contributor** for the agent being evaluated. Credentials are read
-from the shell environment, then the repository-root `.env`. Keep `.env` private.
+Accept Hermes's dependency installation if prompted. Restart your running Hermes session/gateway after enabling. For named profiles, use that profile's `HERMES_HOME` and enable the plugin in that profile. No plugin-specific orchestration API key is required: **orchestration uses the active profile's Hermes model and host-owned authentication through `ctx.llm`**. Session-only model overrides are not transferred into the independent CLI worker.
 
-## 2. Prepare the agent runtime
+Open `hermes dashboard` and select **Reliability Lab**. Hermes Desktop also has a **Reliability Lab** extension/page; enable its Desktop half in Plugins. Both use the same profile-local campaign store.
 
-### Hermes
+Start with scenario design:
 
-Install Hermes and its dependencies using the Hermes repository's setup process.
-Locate the Python executable in that installation's environment. The dashboard asks
-for this executable under **Runtime Python**.
-
-Install this project's dependencies into the Hermes environment while preserving
-its existing packages. Activate that environment, then run from this project
-
-```sh
-uv sync --active --inexact --locked --no-dev
+```text
+Use Reliability Lab to design reliability tests for /absolute/path/to/my-agent.
+Focus on recovery after interrupted tool calls and repeated external actions.
 ```
 
-For direct benchmark commands, also set `HERMES_AGENT_ROOT` in `.env` to the checkout
-containing `run_agent.py`. Dashboard campaigns clone their selected source into
-private run storage and pass that checkout to Hermes.
+Or use the CLI:
 
-### OpenHands or DeerFlow
-
-Build a native runtime image from a clean checkout at the revision you want to test.
-The following OpenHands example uses a pinned revision already exercised by this project
-
-```sh
-git clone https://github.com/OpenHands/software-agent-sdk.git eval_harness/sources/openhands_sdk
-git -C eval_harness/sources/openhands_sdk checkout b0789c73151a967fdd4a10f8383d2c0bc7109563
-docker build -f src/evaluation/agent_runtime.Dockerfile --build-arg AGENT=openhands --build-arg SOURCE_REVISION=b0789c73151a967fdd4a10f8383d2c0bc7109563 -t agent-eval-openhands:b0789c7 eval_harness/sources/openhands_sdk
+```bash
+hermes reliability start /absolute/path/to/my-agent --runtime custom \
+  --scope "Recovery from interrupted tool calls and duplicate actions"
+hermes reliability status
+hermes reliability stop JOB_ID
+hermes reliability evidence CAMPAIGN_ID campaign.json
 ```
 
-For DeerFlow
+The native tools are `reliability_start`, `reliability_status`, `reliability_stop`, and `reliability_evidence`. `/reliability status` lists campaigns. Launch returns a job ID; a separate Hermes CLI worker performs the campaign, and closing the browser does not stop it. Stops are cooperative at safe boundaries; an in-flight source request, provider call, or target execution finishes or reaches its configured timeout first. If a worker exits unexpectedly, its job is shown as interrupted and its evidence is retained. You can reuse its generated tests in a new campaign; the plugin does not silently replay interrupted external actions.
 
-```sh
-git clone https://github.com/bytedance/deer-flow.git eval_harness/sources/deerflow
-git -C eval_harness/sources/deerflow checkout 14abd9a28eb035f277aa56098caab1b0600c6e8d
-docker build -f src/evaluation/agent_runtime.Dockerfile --build-arg AGENT=deerflow --build-arg SOURCE_REVISION=14abd9a28eb035f277aa56098caab1b0600c6e8d -t agent-eval-deerflow:14abd9a eval_harness/sources/deerflow
-```
+## Dataset grounding
 
-Select that image in the dashboard. Leave **Revision** empty to use its labelled
-source commit. The image and inspected source must match. Newer source revisions
-require a matching rebuilt image and may need adapter updates.
-
-For these runtimes, use this project's `.venv` Python as **Runtime Python**.
-The dashboard fills settings from earlier local campaigns when available.
-
-### Other agentic systems
-
-Choose **Custom agent** and supply a repository URL or local code directory. No Git
-history is required for local code. The campaign takes a private content-hashed snapshot;
-local Git directories without a selected revision include working changes and untracked
-files. Dependency directories, `.env` files, private-key files and symlinks are excluded.
-Remote Git repositories are cloned and pinned to the resolved commit.
-
-You can generate and review scenarios immediately with **Execute generated tests**
-unchecked. To run them against your framework, provide a trusted Python adapter factory
-such as `/absolute/path/adapter.py:create_adapter`. This supplies the framework's launch,
-tool, state and trace integration. A source path alone does not define those runtime
-interfaces. See [the custom adapter contract](ORCHESTRATOR.md#custom-agent-execution).
-
-## 3. Open the dashboard
-
-```sh
-uv run --locked python -m src.orchestrator.app
-```
-
-Open **http://localhost:8765**. Use `--port 8766` if that port is occupied.
-
-1. Click **New campaign** and choose a built-in runtime or **Custom agent**.
-2. Enter a repository URL or local source directory. Built-in execution adapters
-   require a clean Git checkout matching the runtime; custom agents also accept local working code.
-3. Configure runtime execution if needed: Python for Hermes, a matching Docker image
-   for OpenHands/DeerFlow, or a custom adapter factory. Leave execution unchecked for scenario design.
-4. Choose an earlier campaign to reuse its tests, or choose **Start a new test suite**.
-5. Review the model settings and budgets, then click **Launch campaign**.
-
-The main agent and reviewers use the same orchestrator model. Model endpoints,
-credential-variable names, scope, approval mode, and budgets are editable under
-**Models, budgets & comparison settings**. The defaults allow five initial tests,
-twelve active tests, three generations per round, and three execution rounds.
-A seeded campaign can begin with up to twelve existing tests.
-
-The dashboard shows selected datasets and their sample availability, source reads and edits, readable scenario cards with actual
-user turns and checks, reviewer findings, results by evaluator and condition, and
-causal findings. The sidebar shows active campaigns and completed campaigns with
-final causal findings, plus completed scenario-design campaigns. The dashboard prepares readable finding cards using an additional
-call to that campaign's orchestrator model for each analyzed round. It caches the result
-and records the additional requests and tokens. Each card retains its original findings,
-attribution and citations. **Stop at next boundary**
-requests a cooperative stop after the current request or execution stage finishes.
-Closing the dashboard leaves its separately launched campaign worker running.
-
-The three bundled examples are portable, read-only snapshots under `examples/campaigns/`.
-They include scenario contracts, reviews, branch outcomes, analyses, cached finding cards
-and usage totals. Private machine paths are replaced with placeholders. Citations retain
-their original identifiers. Complete raw API and execution traces are retained locally.
-If the matching full campaign exists on your machine, the sidebar shows that local campaign.
-
-Generated evaluator code and Hermes tools execute on the host. OpenHands and
-DeerFlow task tools execute in nonroot containers without host mounts or network
-access. Model API calls are relayed by the host and billed to your provider account.
-Custom adapters define their own execution environment. The dashboard binds to localhost
-and uses a session token for launch/stop requests.
-
-### Workload-specific scenario sources
-
-Before the first scenario-generation request, the campaign fetches relevant dataset
-cards and small user-request samples. Each runtime has a different default source set:
-
-| Agent | Sources | Workload |
-|---|---|---|
-| Hermes | [AssistantBench](https://huggingface.co/datasets/AssistantBench/AssistantBench), [WebLINX](https://huggingface.co/datasets/McGill-NLP/WebLINX) | Personal assistance, conversational browsing and research |
-| OpenHands | [SWE-chat](https://huggingface.co/datasets/SALT-NLP/SWE-chat), [Pi sessions](https://huggingface.co/datasets/badlogicgames/pi-mono) | Coding conversations, debugging and repository changes |
-| DeerFlow | [Clem's ML Intern sessions](https://huggingface.co/datasets/clem/ml-intern-sessions), [Lewis Tunstall's sessions](https://huggingface.co/datasets/lewtun/ml-intern-sessions), WebLINX, AssistantBench | Research, ML engineering and information synthesis |
-| Custom agent | Source-guided searches of Hugging Face datasets, its [Agent Traces catalogue](https://huggingface.co/datasets?format=format%3Aagent-traces), and Zenodo | Workflows inferred from the agent's actual source and campaign scope |
-
-For custom agents, the orchestrator first reads source to identify the workload and
-form short search queries, calls the public catalogue APIs, and selects relevant results.
-No paid search-service key is required. An optional `HF_TOKEN` in `.env` enables dataset
-access granted to your Hugging Face account; gated sources still require that account's approval.
-
-The generator and all three reviewers receive the selected sources, access limitations,
-and available excerpts. Each scenario rationale records its dataset and adaptation, or
-explains why it comes directly from the architecture. The sources seed synthetic tasks
-and independent checks; their recorded answers or reasoning are not correctness oracles.
-AssistantBench contains benchmark tasks, WebLINX human demonstrations, and session-upload
-provenance varies by source. These are not interchangeable kinds of real-user evidence.
-
-Campaigns save `datasets/manifest.json`, request metadata/hashes and custom-search candidates.
-Hugging Face cards and JSONL samples use pinned revisions. Viewer samples record their
-fetch time, split and row because that API does not pin rows to a commit. Gated or unsupported
-samples appear as card-only or metadata-only evidence. If no selected source can be inspected,
-the campaign stops with an explicit discovery error. It never substitutes AssistantBench
-for an unavailable coding or custom-agent source. See [discovery settings](ORCHESTRATOR.md#dataset-discovery)
-to override sources or deliberately run offline without discovery.
-
-### Local models and other APIs
-
-Both orchestrator and target connections accept a Chat Completions API root and
-an exact model ID. Tool-capable models are required for the target. The orchestrator
-must be able to return the structured action/response objects described in its prompts.
-
-| Provider | API root | Credential variable example |
-|---|---|---|
-| Meta | `https://api.meta.ai/v1` | `META_KEY` |
-| LM Studio | The URL shown by your server, ending in `/v1` | `LOCAL_API_KEY` |
-| Ollama | `http://localhost:11434/v1` | `LOCAL_API_KEY` |
-| Other compatible API | Your provider's Chat Completions API root | `PROVIDER_API_KEY` |
-
-Add the named variable to `.env`. For a local endpoint without authentication,
-use a nonempty placeholder such as `LOCAL_API_KEY=local`. Enter the server's exact
-model identifier. Orchestrator output-token caps are optional explicit configuration.
-Target frameworks can supply their own SDK or retry defaults, recorded in API traces.
-
-## Reuse tests and compare framework versions
-
-The dashboard discovers earlier campaigns for the selected repository. Reusing one
-imports its hash-verified scenario snapshot into the new campaign. The orchestrator
-can read the selected campaign's analyses, reports and cleaned transcripts through
-indexed evidence. It
-can retain, revise, remove, or add tests, with review and validation applied again.
-Earlier custom evaluator code requires explicit reimplementation if its capabilities
-are needed by the retained tests.
-
-For Hermes, selecting an earlier campaign at a different revision automatically
-sets that revision as the comparison base. You can also enter a **Base revision**.
-The orchestrator receives the source diff and indexed prior results, then records
-predicted outcomes before execution.
-
-| Execution lane | Framework | Evaluator |
-|---|---|---|
-| `candidate` | Selected revision | Orchestrator-edited evaluator |
-| `trusted` | Selected revision | Original evaluator |
-| `base_version` | Earlier revision | Original evaluator, in version mode |
-
-Each lane samples its own trajectory. The differential report classifies observed
-changes by property layer. Interpretation uses transcripts and evidence to assess
-framework changes, model variability, verifier defects, and unavailable capabilities.
-
-## CLI alternatives
-
-Copy `orchestrator.example.json` or `orchestrator.regression.example.json` into
-`eval_harness/`, configure the pinned source and runtime, then run
-
-```sh
-uv run --locked python -m src.orchestrator --config eval_harness/my_campaign.json --execute
-```
-
-Omit `--execute` to generate and review tests. Add `--smoke` for one active test and
-one execution round. The full configuration and native adapter contracts are in
-[ORCHESTRATOR.md](ORCHESTRATOR.md).
-
-## Run the authored benchmark
-
-The authored suite contains **109 scenarios and 192 user turns**, including seven
-controlled pairs and eighteen scaled workflows. It uses `scenario.schema.json`.
-Validate without installing an agent runtime
-
-```sh
-uv run --locked python -m src.evaluation.evaluate --validate-only
-```
-
-For Hermes, activate its prepared Python environment and configure
-
-```dotenv
-HERMES_AGENT_ROOT=/path/to/hermes-agent
-EVAL_BASE_URL=https://api.meta.ai/v1
-EVAL_MODEL=muse-spark-1.3-contributor
-EVAL_API_KEY=your-api-key
-```
-
-Then run
-
-```sh
-uv run --active --no-sync python -m src.evaluation.evaluate
-uv run --active --no-sync python -m src.evaluation.evaluate --suite-file suites/core_v1.json --hermes-approval gate
-uv run --active --no-sync python -m src.evaluation.evaluate --scenario-id scen_41_versioned_event_edit --repetitions 3
-```
-
-For local models, change `EVAL_BASE_URL`, `EVAL_MODEL`, and `EVAL_API_KEY` to the local
-server settings. CLI arguments override the shell environment and `.env`.
-The frozen `core_v1` selection contains 32 scenarios for comparisons.
-
-## Evidence and interpretation
-
-Dashboard launches live under `eval_harness/orchestrator/dashboard/`. Each launch
-freezes controller source and schema. Campaigns retain configuration, source
-provenance, scenario revisions, reviewer feedback, both evaluator results,
-transcripts, raw API/tool evidence, costs, and analyses. Benchmark runs live under
-`eval_harness/runs/`. These directories and `.env` are ignored by Git.
-
-A failed prerequisite can produce a separately labelled diagnostic continuation
-from an authored successful prefix. Controlled comparisons use independent branch
-state. Shared sampled prefixes currently support portable service state. File-bearing
-workflows can branch at turn one. Task completion, property exposure, enforcement,
-and evaluation validity are reported separately. Dollar estimates require explicit
-model pricing. Missing usage remains unknown.
-
-Read [BENCHMARK.md](BENCHMARK.md) for scoring and branching contracts and
-[PROPERTY_CATALOG.md](PROPERTY_CATALOG.md) for property coverage.
-
-## Development
-
-```sh
-uv run --locked python -m unittest discover -s tests -v
-uv run --locked ruff check src tests
-uv run --locked ruff format --check src tests
-node --check src/orchestrator/web/app.js
-```
-
-The web interface uses the Python standard library and static HTML/CSS/JavaScript.
-It requires no frontend build step. Tests use fake model transports unless a native
-integration test is explicitly enabled.
-
-| Directory | Purpose |
+| Target | Starting sources |
 |---|---|
-| `src/orchestrator/` | Generation, review, campaign lifecycle, dashboard, and regression index |
-| `src/orchestrator/prompts.py` | Main, reviewer, and analysis instructions |
-| `src/orchestrator/web/` | Dashboard interface |
-| `examples/campaigns/` | Three reviewed, portable dashboard result snapshots |
-| `src/evaluation/` | Runtime adapters, perturbations, mocks, verification, and evidence |
-| `scenarios/`, `suites/` | Authored tasks and frozen selections |
-| `tests/` | Regression and integration checks |
-| `eval_harness/` | Private local experiments |
-| `archives/` | Retired benchmark and historical evidence |
+| Hermes | [AssistantBench](https://huggingface.co/datasets/AssistantBench/AssistantBench), [WebLINX](https://huggingface.co/datasets/McGill-NLP/WebLINX) |
+| OpenHands | [SWE-chat](https://huggingface.co/datasets/SALT-NLP/SWE-chat), [Pi development sessions](https://huggingface.co/datasets/badlogicgames/pi-mono) |
+| DeerFlow | [Clem's ML Intern sessions](https://huggingface.co/datasets/clem/ml-intern-sessions), [Lewis Tunstall's sessions](https://huggingface.co/datasets/lewtun/ml-intern-sessions), WebLINX, AssistantBench |
+| Any other agent | Architecture-guided searches of the Hugging Face dataset catalogue/agent-traces collection and Zenodo records, followed by relevance selection |
+
+No paid search service is required. Discovery obtains bounded dataset cards and user-message excerpts where available, preserving URLs, hashes, selection rationale, and sampling errors. It excludes answer keys, tool results, and recorded thinking from workload seeds. These are inspiration for controlled scenarios; the plugin does not replay entire public sessions or claim they all have equivalent provenance. Some sources are unavailable or gated, and a metadata-only source is labeled accordingly. An empty custom search fails visibly rather than silently substituting AssistantBench.
+
+`HF_TOKEN` is optional for gated/private Hugging Face access. Configure it through Hermes's secret management, not a file in this repository. Public discovery works without it. `dataset_discovery` in plugin settings can select explicit sources or disable discovery for a controlled offline development run; disabled discovery is recorded in campaign evidence.
+
+## Executing targets
+
+**Any repository can be inspected and used for scenario design. Executing an arbitrary agent requires a compatible integration.** Built-in runtime adapters remain available for Hermes, OpenHands, and DeerFlow; other systems use a trusted adapter factory. The plugin does not infer an unknown runtime's deployment, tools, checkpoint semantics, or credentials merely from a URL.
+
+Execution is off by default. Configure the target and runtimes under `plugins.entries.hermes-reliability.settings` in the active Hermes profile. Example:
+
+```yaml
+plugins:
+  enabled: [hermes-reliability]  # retain your other enabled plugins
+  entries:
+    hermes-reliability:
+      settings:
+        execution_enabled: true
+        requests: 100
+        timeout_seconds: 180
+        target:
+          base_url: http://localhost:1234/v1
+          model: your-exact-target-model-id
+        runtimes:
+          hermes:
+            python: /absolute/path/to/target-hermes/.venv/bin/python
+            max_iterations: 15
+            timeout_seconds: 1800
+          custom:
+            factory: /absolute/path/to/integration.py:create_adapter
+```
+
+For a hosted target, configure `RELIABILITY_TARGET_API_KEY` through Hermes. The orchestration model's credentials are never extracted or copied. The target adapter receives only the separately configured target credential. An unauthenticated local model server may leave it unset. Target inference currently requires an OpenAI-compatible Chat Completions endpoint; orchestration follows the provider support of Hermes itself.
+
+Then explicitly request execution through the dashboard checkbox, the `execute` tool parameter, or:
+
+```bash
+hermes reliability start https://github.com/NousResearch/hermes-agent.git \
+  --runtime hermes --revision TARGET_COMMIT --execute
+```
+
+Model-initiated execution passes through Hermes's approval hook. The CLI flag and dashboard checkbox are direct operator requests. Target Hermes runs retain their native approval gate; this plugin does not select auto-approval. An unattended target may refuse operations that require an interactive approval, and those refusals must be interpreted as such.
+
+**Execution boundaries matter:** the target Hermes process and generated evaluator Python run on the host. The existing OpenHands/DeerFlow adapters run target tools in pinned, nonroot Docker containers with their configured no-network/no-host-mount boundary; that does not sandbox the host evaluator. Custom integrations control their own target isolation. Use an appropriate test machine/environment for execution. Design mode never executes generated evaluator Python or target tools.
+
+See [runtime integration](docs/runtime-integration.md) for the custom adapter contract and retained runtime limitations.
+
+## Evidence and privacy
+
+State lives under `<active Hermes home>/plugin-data/hermes-reliability/`, outside the plugin install directory. Each job has its configuration, a frozen and hash-checked controller snapshot, and worker log; each campaign has private source snapshots, dataset provenance, generated scenarios, review decisions, candidate/trusted evaluator snapshots, execution reports, and causal analysis. Evidence reads are bounded and confined to the selected campaign. The web dashboard uses Hermes authentication and the documented dashboard SDK; it exposes no separate unauthenticated listener.
+
+Source excerpts, sampled dataset user messages, and campaign evidence are sent to the configured model provider during orchestration. Public catalogues receive search queries; Git contacts the requested repository. Target execution may incur separate model costs. Recognized credential values are redacted, but repository and task contents can still be sensitive. Nothing uploads campaigns or findings to Cornell, GitHub, or a marketplace automatically.
+
+## Development and verification
+
+```bash
+uv sync --group dev
+uv run python -m unittest discover -s tests -q
+uv run ruff check .
+node --check dashboard/index.js
+node --check dashboard/workbench/app.js
+node --check desktop/plugin.js
+hermes plugins doctor . --ci
+hermes plugins validate .
+```
+
+Tests use small synthetic fixtures; they do not require the removed benchmark, paid model calls, or public trace downloads. Docker-dependent target tests skip without their images. The plugin integration tests exercise host-client request budgets and evidence, source preparation, scenario generation, three reviewer passes, job cancellation, approval gating, and isolated registration. Browser verification exercises the web workbench with a local authenticated SDK test host. See [verification notes](docs/verification.md) for this build's results and limits.
+
+This private Cornell branch is **not a public catalog submission**. Hermes catalog admission requires a publicly cloneable source repository, and the retained target harness's private-runtime imports need explicit compatibility review before claiming broad release support. No public repository, marketplace entry, hackathon form, or social post is changed by installing or running this plugin.

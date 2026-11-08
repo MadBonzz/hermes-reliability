@@ -1,11 +1,9 @@
 # Local configuration (may contain credentials).
 .env
 .env.*
-!.env.example
 
 # Local evaluation evidence: reports, traces, correlated requests, diagnostics,
-# and retained task workspaces. Authored inputs live in /scenarios/.
-# Reviewed public dashboard snapshots live separately in /examples/campaigns/.
+# and retained task workspaces. Generated suites belong to private campaigns.
 /eval_harness/
 
 # Verified local archives of retired benchmarks and private run evidence.
@@ -56,3 +54,6 @@ htmlcov/
 coverage.xml
 .DS_Store
 Thumbs.db
+
+# Optional local plugin development state. Production state is in Hermes home.
+/plugin-data/

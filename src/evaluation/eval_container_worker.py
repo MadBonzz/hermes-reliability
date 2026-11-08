@@ -16,20 +16,21 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation.agent_container import AgentContainer, NativeExecutionError, inference_relay
-from src.evaluation.api_trace import APITrace, RequestPacer, SecretRedactor
-from src.evaluation.artifact_checks import evaluate_artifact_check
-from src.evaluation.benchmark import visible_input_validator
-from src.evaluation.checks import (
+from .agent_container import AgentContainer, NativeExecutionError, inference_relay
+from .api_trace import APITrace, RequestPacer, SecretRedactor
+from .artifact_checks import evaluate_artifact_check
+from .benchmark import visible_input_validator
+from .checks import (
     evaluate_output_checks,
     evaluate_process_checks,
     evaluate_state_checks,
 )
-from src.evaluation.evaluation_metrics import efficiency, injection_evidence, native_tool_status
-from src.evaluation.mock_registry import DynamicMockToolManager
-from src.evaluation.runtime_support import TurnTrace, workspace_manifest, write_json_atomic
+from .evaluation_metrics import efficiency, injection_evidence, native_tool_status
+from .mock_registry import DynamicMockToolManager
+from .runtime_support import TurnTrace, workspace_manifest, write_json_atomic
 
 
 def materialize(root, snapshot):

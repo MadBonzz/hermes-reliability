@@ -9,10 +9,10 @@ import json
 import sys
 from pathlib import Path
 
-from src.evaluation.benchmark import validate_benchmark
-from src.evaluation.runtime_support import sha256_file, write_json_atomic
-from src.evaluation.scenario_validation import load_scenarios
-from src.orchestrator.adapters import ROOT, revision_hashes
+from ..evaluation.benchmark import validate_benchmark
+from ..evaluation.runtime_support import sha256_file, write_json_atomic
+from ..evaluation.scenario_validation import load_scenarios
+from .adapters import ROOT, revision_hashes
 
 
 class CustomAdapter:

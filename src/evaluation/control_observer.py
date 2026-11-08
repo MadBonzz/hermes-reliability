@@ -14,7 +14,7 @@ import uuid
 from contextvars import ContextVar
 from pathlib import Path
 
-from src.evaluation.runtime_support import sha256_file
+from .runtime_support import sha256_file
 
 _LOCK = threading.Lock()
 HOOKS = [

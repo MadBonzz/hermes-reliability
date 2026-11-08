@@ -13,13 +13,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation import utils
-from src.evaluation.api_trace import APITrace
-from src.evaluation.control_observer import NativeControlObserver
-from src.evaluation.execution_isolation import file_tool_guard, isolated_python
-from src.evaluation.mock_registry import DynamicMockToolManager
+from . import utils
+from .api_trace import APITrace
+from .control_observer import NativeControlObserver
+from .execution_isolation import file_tool_guard, isolated_python
+from .mock_registry import DynamicMockToolManager
 
 
 def main():

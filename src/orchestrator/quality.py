@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from src.evaluation.benchmark import condition_spec
-from src.orchestrator.prompts import MISSING_REGRESSION_FEEDBACK
+from ..evaluation.benchmark import condition_spec
+from .prompts import MISSING_REGRESSION_FEEDBACK
 
 
 def check_catalog(cases):
@@ -242,7 +242,7 @@ def validate_dataset_grounding(plan, manifest):
 
 def validate_version_plan(plan, changed_files):
     """Version mode: every test names its change target, property layer and predictions."""
-    from src.orchestrator.prompts import PREDICTED_OUTCOMES, PROPERTY_LAYERS
+    from .prompts import PREDICTED_OUTCOMES, PROPERTY_LAYERS
 
     rows = plan.get("rationale")
     if not isinstance(rows, list) or not rows:

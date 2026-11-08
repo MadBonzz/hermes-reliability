@@ -5,8 +5,8 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from src.evaluation.audit_api_evidence import reconstruct_responses
-from src.evaluation.runtime_support import read_jsonl
+from .audit_api_evidence import reconstruct_responses
+from .runtime_support import read_jsonl
 
 
 def canonical_arguments(value):

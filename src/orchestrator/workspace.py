@@ -8,17 +8,17 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from src.evaluation.artifact_checks import evaluate_artifact_check
-from src.evaluation.benchmark import condition_spec, validate_benchmark
-from src.evaluation.checks import (
+from ..evaluation.artifact_checks import evaluate_artifact_check
+from ..evaluation.benchmark import condition_spec, validate_benchmark
+from ..evaluation.checks import (
     evaluate_output_checks,
     evaluate_process_checks,
     evaluate_state_checks,
 )
-from src.evaluation.runtime_support import sha256_file
-from src.evaluation.scenario_validation import external_schema_ref
-from src.evaluation.utils import resolve_ws_path
-from src.orchestrator.quality import check_catalog
+from ..evaluation.runtime_support import sha256_file
+from ..evaluation.scenario_validation import external_schema_ref
+from ..evaluation.utils import resolve_ws_path
+from .quality import check_catalog
 
 
 class Workspace:

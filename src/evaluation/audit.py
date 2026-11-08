@@ -7,12 +7,13 @@ from collections import Counter
 from pathlib import Path
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation.analyze import metrics_total
-from src.evaluation.audit_api_evidence import audit
-from src.evaluation.evaluation_metrics import efficiency
-from src.evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
+from .analyze import metrics_total
+from .audit_api_evidence import audit
+from .evaluation_metrics import efficiency
+from .runtime_support import read_jsonl, sha256_file, write_json_atomic
 
 
 def audit_campaign(path):

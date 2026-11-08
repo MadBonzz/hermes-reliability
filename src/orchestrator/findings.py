@@ -11,11 +11,11 @@ from pathlib import Path
 
 from jsonschema import Draft7Validator, ValidationError
 
-from src.evaluation.api_trace import SecretRedactor
-from src.evaluation.runtime_support import write_json_atomic
-from src.evaluation.utils import load_eval_config
-from src.orchestrator.dashboard import read_json
-from src.orchestrator.prompts import DASHBOARD_FINDINGS_PROMPT, DASHBOARD_FINDINGS_REPAIR
+from ..evaluation.api_trace import SecretRedactor
+from ..evaluation.runtime_support import write_json_atomic
+from ..evaluation.utils import load_eval_config
+from .dashboard import read_json
+from .prompts import DASHBOARD_FINDINGS_PROMPT, DASHBOARD_FINDINGS_REPAIR
 
 TEXT = {"type": "string", "minLength": 1}
 PRESENTATION_SCHEMA = {
@@ -170,7 +170,7 @@ def exclusive(folder):
 
 
 def generate(directory, environment, client_factory=None):
-    from src.orchestrator.runner import Client, api_usage
+    from .runner import Client, api_usage
 
     item = inputs(directory)
     if item is None:

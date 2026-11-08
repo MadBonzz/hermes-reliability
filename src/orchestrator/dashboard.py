@@ -4,8 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from src.evaluation.differential import phase_rows
-from src.evaluation.runtime_support import sha256_file
+from ..evaluation.differential import phase_rows
+from ..evaluation.runtime_support import sha256_file
 
 
 def read_json(path, default=None):
@@ -55,16 +55,8 @@ class Catalog:
             state = read_json(path / "campaign.json", {})
             progress = read_json(path / "progress.json", {})
             phase = progress.get("phase", "saved")
-            if phase in {"terminal", "saved"} and state.get("stop_reason") != "generated_only":
-                if state.get("stop_reason") not in {
-                    "orchestrator_converged",
-                    "execution_round_limit",
-                }:
-                    continue
-                rounds = sorted(path.glob("round_*"))
-                final = read_json(rounds[-1] / "analysis.json", {}) if rounds else {}
-                if not any(row.get("findings") for row in final.get("scenarios", [])):
-                    continue
+            # Failed and stopped attempts remain inspectable in the plugin. A
+            # dashboard must not hide the evidence needed to diagnose a launch.
             rows.append(
                 {
                     "id": key,
@@ -95,7 +87,7 @@ class Catalog:
         return sorted(rows, key=lambda row: row["modified"], reverse=True)
 
     def detail(self, key):
-        from src.orchestrator.findings import snapshot
+        from .findings import snapshot
 
         bundle = self.bundles().get(key)
         if bundle:

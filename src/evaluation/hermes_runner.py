@@ -7,26 +7,26 @@ import uuid
 from contextlib import ExitStack
 from pathlib import Path
 
-from src.evaluation import utils
-from src.evaluation.api_trace import APITrace, SecretRedactor
-from src.evaluation.checks import (
+from . import utils
+from .api_trace import APITrace, SecretRedactor
+from .checks import (
     evaluate_output_checks,
     evaluate_process_checks,
     evaluate_state_checks,
 )
-from src.evaluation.control_observer import NativeControlObserver, control_coverage
-from src.evaluation.execution_isolation import file_tool_guard
-from src.evaluation.mock_registry import DynamicMockToolManager
-from src.evaluation.perturbations import apply_perturbations, force_unlock_workspace
-from src.evaluation.reference_execution import ReferenceAgent, causal_observations
-from src.evaluation.runtime_support import (
+from .control_observer import NativeControlObserver, control_coverage
+from .execution_isolation import file_tool_guard
+from .mock_registry import DynamicMockToolManager
+from .perturbations import apply_perturbations, force_unlock_workspace
+from .reference_execution import ReferenceAgent, causal_observations
+from .runtime_support import (
     TurnTrace,
     current_turn_messages,
     json_safe,
     utc_now,
     workspace_manifest,
 )
-from src.evaluation.utils import (
+from .utils import (
     check_tool_catalog,
     extract_turn_tool_calls,
     hermes_workspace,

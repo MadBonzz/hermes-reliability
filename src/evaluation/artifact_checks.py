@@ -8,8 +8,8 @@ import time
 import uuid
 from pathlib import Path, PurePosixPath
 
-from src.evaluation.agent_container import docker_command
-from src.evaluation.runtime_support import sha256_file, write_json_atomic
+from .agent_container import docker_command
+from .runtime_support import sha256_file, write_json_atomic
 
 # This loader runs only in Docker. The authored check never executes on the host.
 LOADER = r"""

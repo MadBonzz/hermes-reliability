@@ -7,9 +7,10 @@ from collections import defaultdict
 from pathlib import Path
 
 if __package__ in (None, ""):
+    __package__ = "src.evaluation"
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.evaluation.runtime_support import write_json_atomic
+from .runtime_support import write_json_atomic
 
 
 def metrics_total(reports):

@@ -8,7 +8,7 @@ import base64
 import copy
 import json
 
-from src.evaluation import utils
+from . import utils
 
 
 class ReferenceAgent:
