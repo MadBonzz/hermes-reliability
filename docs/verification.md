@@ -5,10 +5,10 @@ Verified on 2026-11-08 with Python 3.14.9 and Hermes source commit
 
 | Check | Result |
 |---|---|
-| Unit and integration suite | **279 tests discovered: 265 passed, 14 skipped** |
+| Unit and integration suite | **294 tests discovered: 280 passed, 14 skipped** |
 | Ruff | Passed |
 | Web tab, workbench, Desktop JavaScript syntax | Passed |
-| `hermes plugins doctor … --ci` | Passed real discovery, manifest parsing, import and registration: four tools and one hook |
+| `hermes plugins doctor … --ci` | Passed real discovery, manifest parsing, import and registration: eight tools and one hook, plus the bounded baseline/memory system-prompt section |
 | `hermes plugins validate …` | Passed manifest, capability probe, dependency constraints, security scan, no-core-override check and Desktop SDK surface checks |
 | Actual Hermes ASGI authentication | Campaign API returned 401 without auth and 200 with the Hermes session header; plugin static assets loaded through the host asset route |
 | Actual CLI worker from dashboard API | Launched from a queued job, honored a queued stop, and persisted the stopped outcome |
@@ -20,6 +20,45 @@ Verified on 2026-11-08 with Python 3.14.9 and Hermes source commit
 The browser used the **real Hermes ASGI server, auth middleware, plugin discovery, assets and backend router**, with a small React shell implementing the documented dashboard SDK contract. The Desktop file passed admission lint and syntax checks; the native Desktop application itself was not launched.
 
 The end-to-end design campaign used a deterministic fixture model through the plugin's host-client interface. It exercised source inspection, scenario writes, mechanical validation, all three review contexts, immutable evidence, usage accounting and dashboard rendering. Existing tests separately exercise dataset discovery before generation with mocked catalogue responses, candidate/trusted execution, audit rejection cases and custom runtime contracts. Fixture outcomes are not measurements of a real target agent.
+
+## Version 0.2: frozen regression and native memory
+
+The regression workflow was tested with **real Hermes runtime processes, native
+file tools, the actual plugin CLI worker, and a local deterministic Chat Completions
+fixture server**. No paid provider inference was used for these additional checks.
+
+- Executed an operator-authored controlled file-reading pair, audited both phases,
+  and froze its trusted evaluator/scenarios as a content-addressed benchmark.
+- Launched `mode=regression` through the plugin's detached Hermes CLI worker. The
+  fixture server deliberately gave wrong answers on the rerun. Both phases were
+  correctly labeled regressed, with matching benchmark hashes, passing evidence
+  audits and zero generation/model-review calls.
+- Exercised the real Hermes agent loop with plugin tools routed through native
+  `tool_call`. `reliability_memory` returned a verified reference; the native
+  `memory` tool then confirmed an applied write. A **fresh Hermes session received
+  both IDs through its native memory context**. The plugin never directly opened
+  or wrote the memory file.
+- Chromium exercised the actual authenticated Hermes ASGI backend and existing
+  SDK test shell: saved history, freeze, baseline selection, two regression rows,
+  memory-note handoff, fixed-run rendering, and rejection without execution opt-in.
+  Unauthenticated history and mutation requests were rejected. No browser errors.
+- Focused tests cover new benchmark versions, preserved assertions, configuration
+  mismatch, invalid/empty coverage, failed audits, evidence/evaluator tampering,
+  legacy provenance, concurrent history writes, cross-profile/stale IDs, linked
+  paths, explicit execution permission and cooperative cancellation.
+
+The native check also exposed an unauthenticated-target issue: an empty API key
+caused Hermes to resolve an ambient provider despite an explicit local endpoint.
+The target harness now supplies a nonsecret placeholder when no target key is
+configured; explicit credentials are preserved. This path passed the native test
+and a dedicated regression test.
+
+These fixtures verify the software workflow, including actual native memory
+persistence, but do not establish model reliability or complete the outstanding
+autonomous paid-provider campaign below. Desktop passed admission and JavaScript
+syntax checks; the native Desktop application was not launched. Memory staging,
+capacity and alternate providers remain governed by Hermes; the plugin returns a
+handoff rather than claiming that those writes succeeded.
 
 ## Live Cohere Command A verification
 

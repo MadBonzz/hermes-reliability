@@ -60,6 +60,7 @@ class Catalog:
             rows.append(
                 {
                     "id": key,
+                    "mode": config.get("mode", "explore"),
                     "source_attempt": path.name,
                     "runtime": config.get("adapter", {}).get("kind", "hermes"),
                     "repository": config.get("source", {}).get("repository", ""),
@@ -153,6 +154,9 @@ class Catalog:
                 tests.append(value)
         return {
             "id": key,
+            "mode": config.get("mode", "explore"),
+            "regression": read_json(path / "regression_comparison.json", {}),
+            "benchmark": read_json(path / "benchmark.json", {}),
             "path": str(path),
             "source": config.get("source", {}),
             "limits": config.get("limits", {}),

@@ -12,15 +12,28 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from ..evaluation.api_trace import SecretRedactor
-from ..evaluation.runtime_support import write_json_atomic
+from ..evaluation.runtime_support import sha256_file, write_json_atomic
 from ..orchestrator.dashboard import Catalog, identity, read_json
 from ..orchestrator.runner import CampaignPreempted, run
 from .client import HermesClient
+from .history import History
+from .regression import run_fixed
 from .snapshot import ROOT, freeze, service_class, verify
 from .source import REPOSITORIES, resolve_source
 
 PLUGIN_ID = "hermes-reliability"
-ALLOWED_REQUEST = {"source", "runtime", "scope", "revision", "execute", "limits", "prior_campaign"}
+ALLOWED_REQUEST = {
+    "source",
+    "runtime",
+    "scope",
+    "revision",
+    "execute",
+    "limits",
+    "prior_campaign",
+    "mode",
+    "benchmark_id",
+    "baseline_run_id",
+}
 
 
 def data_root():
@@ -61,6 +74,7 @@ class Service:
         self.root = Path(root) if root is not None else data_root()
         self.options = options if options is not None else settings()
         self.catalog = Catalog(self.root / "campaigns", bundled_root=self.root / "no-bundles")
+        self.history = History(self.root, self.catalog)
 
     def job_path(self, job_id):
         if not isinstance(job_id, str) or not re.fullmatch(r"[a-f0-9]{32}", job_id):
@@ -177,6 +191,10 @@ class Service:
             "scope": scope,
             "execute": execute,
             "adapter": adapter,
+            "adapter_implementation": {
+                name: sha256_file(ROOT / "src/orchestrator" / name)
+                for name in ("adapters.py", "custom_adapter.py", "hermes_worker.py")
+            },
             "target": target,
             "limits": {**limits, "requests": requests},
             "orchestrator": {
@@ -191,6 +209,44 @@ class Service:
             "regression_index": str(self.root / "regression_index.json"),
         }
         prior = request.get("prior_campaign")
+        mode = request.get("mode", "explore")
+        if mode not in {"explore", "regression"}:
+            raise ValueError("Mode must be explore or regression")
+        config["mode"] = mode
+        if mode == "regression":
+            if not execute or prior:
+                raise ValueError(
+                    "Regression requires explicit execution and frozen benchmark IDs, not prior_campaign"
+                )
+            benchmark_id, baseline_id = request.get("benchmark_id"), request.get("baseline_run_id")
+            # Validates profile ownership, hashes and audited baseline membership.
+            self.history.memory_note(benchmark_id, baseline_id)
+            manifest, _ = self.history.benchmark(benchmark_id)
+            if kind != manifest["runtime"]:
+                raise ValueError("Runtime does not match the frozen benchmark")
+            count = sum(
+                name.startswith("scenarios/") and name.endswith(".json")
+                for name in manifest["files"]
+            )
+            if count > limits["active_tests"]:
+                raise ValueError(
+                    "Frozen benchmark exceeds the active test budget; raise the cap to run the complete unchanged suite"
+                )
+            config["regression"] = {"benchmark_id": benchmark_id, "baseline_run_id": baseline_id}
+            config["limits"] = {
+                **limits,
+                "rounds": 1,
+                "generations": 1,
+                "requests": 0,
+                "active_tests": count,
+                "initial_tests": min(count, 5),
+            }
+            config["dataset_discovery"] = {
+                "enabled": False,
+                "reason": "Frozen benchmark provenance is reused",
+            }
+        elif request.get("benchmark_id") or request.get("baseline_run_id"):
+            raise ValueError("Benchmark and baseline IDs require regression mode")
         if prior:
             previous = read_json(self.catalog.resolve(prior) / "config.json", {})
             if previous.get("adapter", {}).get("kind") != kind:
@@ -260,7 +316,19 @@ class Service:
         return result
 
     def list(self):
-        return {"campaigns": self.catalog.cards(), "jobs": self.jobs()}
+        return {"campaigns": self.catalog.cards(), "jobs": self.jobs(), **self.history.list()}
+
+    def promote(self, campaign_id, round_number=None, remember=False):
+        if type(remember) is not bool or (
+            round_number is not None and (type(round_number) is not int or round_number < 1)
+        ):
+            raise ValueError("Invalid benchmark selection")
+        result = self.history.promote(campaign_id, round_number=round_number)
+        if remember:
+            result["memory"] = self.history.memory_note(
+                result["benchmark_id"], result["baseline_run_id"]
+            )
+        return result
 
     def stop(self, campaign_id=None, job_id=None):
         if job_id:
@@ -343,13 +411,18 @@ class Service:
             def client(*args):
                 return HermesClient(*args, llm=ctx.llm)
 
-            result = run(
-                config,
-                client_factory=client,
-                execute=config["execute"],
-                on_created=created,
-                credential_values=values,
-            )
+            if config.get("mode") == "regression":
+                result = run_fixed(
+                    config, self.history, on_created=created, credential_values=values
+                )
+            else:
+                result = run(
+                    config,
+                    client_factory=client,
+                    execute=config["execute"],
+                    on_created=created,
+                    credential_values=values,
+                )
             verify(folder)
             job.update(
                 status="stopped"
@@ -368,6 +441,11 @@ class Service:
                 error=SecretRedactor(values.values())(f"{type(exc).__name__}: {exc}"),
             )
         finally:
+            if job.get("campaign_id"):
+                try:
+                    self.history.record_campaign(job["campaign_id"])
+                except (ValueError, OSError, KeyError, TypeError) as exc:
+                    job["history_error"] = SecretRedactor(values.values())(str(exc))
             job["finished_at"] = time.time()
             write_json_atomic(folder / "job.json", job)
         return job

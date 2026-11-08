@@ -4,6 +4,9 @@ const $ = (id) => document.getElementById(id);
 
 let campaigns = [];
 let defaults = {};
+let runHistory = [];
+let benchmarks = [];
+let historySignature = "";
 let selected = new URLSearchParams(location.search).get("campaign");
 let current = null;
 let selectedRound = null;
@@ -60,6 +63,7 @@ function selectCampaign(id) {
   launchError = null;
   selected = id;
   selectedRound = null;
+  campaignSignature = "";
   history.replaceState({}, "", "?campaign=" + encodeURIComponent(id));
   refresh();
 }
@@ -102,7 +106,7 @@ function renderCampaign(detail) {
   $("welcome").hidden = true;
   $("campaign").hidden = false;
   $("campaign-repository").textContent = card.repository.replace(/^https?:\/\//, "").replace(/\.git$/, "");
-  $("campaign-title").textContent = card.runtime[0].toUpperCase() + card.runtime.slice(1) + " / " + (detail.source.base_revision ? "Version regression" : "Property exploration");
+  $("campaign-title").textContent = card.runtime[0].toUpperCase() + card.runtime.slice(1) + " / " + (detail.mode === "regression" ? "Frozen benchmark regression" : detail.source.base_revision ? "Version regression" : "Property exploration");
   $("campaign-models").textContent = `${card.orchestrator} → ${card.target} · ${card.revision.slice(0, 10)}`;
   const phase = detail.progress.phase || "saved";
   $("stop").hidden = ["terminal", "saved"].includes(phase);
@@ -173,6 +177,8 @@ function renderCampaign(detail) {
   selectedRound = selectedRound || last?.number;
   $("round-select").value = selectedRound || "";
   renderReviews();
+  $("freeze-benchmark").disabled = !["terminal", "saved"].includes(phase) || !trusted || trusted.audit?.passed !== true;
+  renderComparison($("regression-result"), detail.regression, detail.mode === "regression" ? "Running the frozen benchmark against its selected historical baseline." : "Freeze a finished trusted execution to establish a fixed regression benchmark.");
   for (const section of document.querySelectorAll("details[data-key]")) section.open = expanded.has(section.dataset.key);
   const usage = detail.usage.reported_tokens || {};
   const tokens = usage.input_tokens !== undefined ? ` · Orchestrator tokens ${Number(usage.input_tokens).toLocaleString()} in / ${Number(usage.output_tokens).toLocaleString()} out` : "";
@@ -207,6 +213,12 @@ function renderReviews() {
   $("reviews").replaceChildren();
   $("analysis").replaceChildren();
   $("earlier-reviews").replaceChildren();
+  if (current?.mode === "regression") {
+    empty($("reviews"), `Uses the frozen design from campaign ${current.benchmark?.origin_campaign || "saved"}, round ${current.benchmark?.origin_round || "—"}. No new generation or design reviews.`);
+    empty($("analysis"), "Regression verdicts above are computed from saved, audited outcomes. They do not establish a causal explanation or statistical significance.");
+    $("findings-count").textContent = "Fixed benchmark";
+    return;
+  }
   if (!round) return;
   const generation = round.generations.at(-1);
   for (const role of ["task_quality", "experimental_validity", "verification_attribution"]) {
@@ -398,9 +410,76 @@ function updatePrior() {
   for (const card of matches) $("prior").append(new Option(`${card.revision.slice(0, 10)} · ${card.target} · ${card.stop_reason || card.phase}`, card.id));
 }
 
+function selectOptions(element, values, label, placeholder) {
+  const previous = element.value;
+  element.replaceChildren(new Option(placeholder, ""), ...values.map(v => new Option(label(v), v.id)));
+  if (values.some(v => v.id === previous)) element.value = previous;
+}
+
+const runLabel = r => `${r.runtime} · ${String(r.revision || "snapshot").slice(0,10)} · ${r.model || "design"} · ${r.valid ? r.status : "invalid / " + r.status} · ${r.id.slice(0,10)}`;
+
+function updateRegression() {
+  const fixed = $("mode").value === "regression";
+  $("regression-selection").hidden = !fixed;
+  $("prior").parentElement.hidden = fixed;
+  $("scope").closest("details").hidden = fixed;
+  $("benchmark").required = fixed;
+  $("baseline").required = fixed;
+  selectOptions($("benchmark"), benchmarks.filter(b => b.runtime === $("runtime").value), b => `${b.repository} · ${b.id.slice(0,12)}`, "Choose a frozen benchmark");
+  selectOptions($("baseline"), runHistory.filter(r => r.valid && r.lane === "trusted" && r.benchmark_id === $("benchmark").value), runLabel, "Choose a baseline run");
+}
+
+function renderComparison(container, result, placeholder = "Choose two saved runs to compare.") {
+  container.replaceChildren();
+  if (!result?.status) { empty(container, placeholder); return; }
+  container.append(badge(result.status));
+  for (const reason of result.reasons || []) container.append(node("p", reason, "error"));
+  for (const row of result.differential?.table || []) {
+    const line = node("p", `${row.id} / ${row.condition} · `);
+    line.append(badge(row.verdict), document.createTextNode(` · ${row.baseline?.pass_rate * 100}% → ${row.candidate?.pass_rate * 100}%`));
+    container.append(line);
+  }
+  if (result.status === "comparable") container.append(node("p", "Observed outcomes for these runs only; a single rerun does not establish statistical significance.", "hint"));
+}
+
+function renderHistory() {
+  const signature = JSON.stringify([runHistory, benchmarks]);
+  if (signature === historySignature) return;
+  historySignature = signature;
+  $("benchmarks").replaceChildren();
+  for (const b of benchmarks) {
+    const row = node("div", null, "panel-heading");
+    row.append(node("span", `${b.repository} · ${b.id.slice(0,12)}`));
+    const start = node("button", "Use for regression", "secondary");
+    start.onclick = () => { $("runtime").value = b.runtime; $("source").value = b.repository.startsWith("file:") ? decodeURIComponent(new URL(b.repository).pathname).replace(/^\/([a-z]:)/i, "$1") : b.repository; $("mode").value = "regression"; openSetup(); $("benchmark").value = b.id; updateRegression(); };
+    row.append(start); $("benchmarks").append(row);
+  }
+  if (!benchmarks.length) empty($("benchmarks"), "No frozen benchmarks yet. Open a completed campaign and freeze its selected round.");
+  $("run-history").replaceChildren(...runHistory.slice(0,100).map(r => {
+    const row = node("p", runLabel(r) + " · ");
+    const inspect = node("button", "Inspect", "secondary"); inspect.onclick = () => selectCampaign(r.campaign_id); row.append(inspect);
+    if (r.invalid_reason) row.append(node("span", " " + r.invalid_reason, "muted"));
+    if (r.valid && r.lane === "trusted" && benchmarks.some(b => b.id === r.benchmark_id)) {
+      const memory = node("button", "Prepare memory note", "secondary");
+      memory.onclick = async () => {
+        try {
+          await api("/api/memory-note", {benchmark_id:r.benchmark_id, baseline_run_id:r.id});
+          $("memory-note").hidden = false; $("memory-note").open = true;
+          $("memory-request").textContent = `Remember my Reliability Lab baseline. Use reliability_memory with benchmark_id=${r.benchmark_id} and baseline_run_id=${r.id}, then use Hermes's native memory tool to save the returned reference.`;
+        } catch(e) { banner(e.message, true); }
+      };
+      row.append(memory);
+    }
+    return row;
+  }));
+  selectOptions($("compare-base"), runHistory.filter(r => r.lane), runLabel, "Choose baseline");
+  selectOptions($("compare-current"), runHistory.filter(r => r.lane), runLabel, "Choose current run");
+}
+
 function openSetup() {
   $("form-error").hidden = true;
   updateSetup();
+  updateRegression();
   $("credentials").textContent = "Orchestration uses your active Hermes model. Source excerpts and bounded dataset samples are sent to that provider.";
   $("setup").showModal();
 }
@@ -413,9 +492,11 @@ $("setup-form").onsubmit = async (event) => {
     const result = await api("/api/start", {
       runtime: $("runtime").value, source: $("source").value, revision: $("revision").value,
       scope: $("scope").value,
-      limits: {rounds: Number($("rounds").value), generations: Number($("generations").value), initial_tests: Number($("initial-tests").value), active_tests: Number($("active-tests").value)},
+      ...($("mode").value === "explore" ? {limits: {rounds: Number($("rounds").value), generations: Number($("generations").value), initial_tests: Number($("initial-tests").value), active_tests: Number($("active-tests").value)}} : {}),
       prior_campaign: $("prior").value || null,
       execute: $("execute").checked,
+      mode: $("mode").value,
+      ...($("mode").value === "regression" ? {benchmark_id:$("benchmark").value, baseline_run_id:$("baseline").value, prior_campaign:null} : {}),
     });
     pendingJob = result.id;
     launchError = null;
@@ -436,7 +517,23 @@ $("stop").onclick = async () => {
 };
 $("new-campaign").onclick = openSetup;
 $("welcome-start").onclick = openSetup;
-$("runtime").onchange = updateSetup;
+$("runtime").onchange = () => { updateSetup(); updateRegression(); };
+$("mode").onchange = updateRegression;
+$("benchmark").onchange = updateRegression;
+$("freeze-benchmark").onclick = async () => {
+  try {
+    const result = await api("/api/freeze", {campaign_id:selected, round_number:Number($("round-select").value)});
+    await refresh(); banner(`Benchmark frozen: ${result.benchmark_id.slice(0,12)}. Select it under New campaign → regression mode.`);
+  } catch(e) { banner(e.message, true); }
+};
+$("index-history").onclick = async () => {
+  try { await api("/api/index-history", {}); await refresh(); banner("Earlier finished campaigns indexed."); }
+  catch(e) { banner(e.message, true); }
+};
+$("compare-runs").onclick = async () => {
+  try { renderComparison($("history-comparison"), await api("/api/compare", {baseline_run_id:$("compare-base").value, current_run_id:$("compare-current").value})); }
+  catch(e) { banner(e.message, true); }
+};
 $("source").onchange = updatePrior;
 $("round-select").onchange = () => { selectedRound = Number($("round-select").value); renderReviews(); };
 for (const button of document.querySelectorAll(".close-dialog")) button.onclick = () => button.closest("dialog").close();
@@ -445,6 +542,7 @@ async function refresh() {
   try {
     const data = await api("/api/campaigns");
     campaigns = data.campaigns;
+    runHistory = data.runs || []; benchmarks = data.benchmarks || []; renderHistory();
     $("job-panel").hidden = !data.jobs.length;
     $("jobs").replaceChildren(...data.jobs.slice().sort((a, b) => b.created_at - a.created_at).slice(0, 6).map((job) => {
       const row = node("div", null, "panel-heading");

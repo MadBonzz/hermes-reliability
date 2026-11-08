@@ -1,7 +1,7 @@
 {
   "name": "hermes-reliability",
   "label": "Reliability Lab",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Evidence-based reliability testing: architecture-aware scenarios, real usage datasets, independent reviews, execution and a campaign dashboard.",
   "author": "Shourya Jain",
   "kind": "standalone",
@@ -19,7 +19,11 @@
     "reliability_start",
     "reliability_status",
     "reliability_stop",
-    "reliability_evidence"
+    "reliability_evidence",
+    "reliability_history",
+    "reliability_freeze",
+    "reliability_compare",
+    "reliability_memory"
   ],
   "provides_hooks": [
     "pre_tool_call"

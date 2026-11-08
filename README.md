@@ -63,7 +63,43 @@ hermes reliability stop JOB_ID
 hermes reliability evidence CAMPAIGN_ID campaign.json
 ```
 
-The native tools are `reliability_start`, `reliability_status`, `reliability_stop`, and `reliability_evidence`. `/reliability status` lists campaigns. Launch returns a job ID; a separate Hermes CLI worker performs the campaign, and closing the browser does not stop it. Stops are cooperative at safe boundaries; an in-flight source request, provider call, or target execution finishes or reaches its configured timeout first. If a worker exits unexpectedly, its job is shown as interrupted and its evidence is retained. You can reuse its generated tests in a new campaign; the plugin does not silently replay interrupted external actions.
+The native tools are `reliability_start`, `reliability_status`, `reliability_stop`, `reliability_evidence`, `reliability_history`, `reliability_freeze`, `reliability_compare`, and `reliability_memory`. `/reliability status` lists campaigns. Launch returns a job ID; a separate Hermes CLI worker performs the campaign, and closing the browser does not stop it. Stops are cooperative at safe boundaries; an in-flight source request, provider call, or target execution finishes or reaches its configured timeout first. If a worker exits unexpectedly, its job is shown as interrupted and its evidence is retained. You can reuse its generated tests in a new campaign; the plugin does not silently replay interrupted external actions.
+
+## Frozen benchmarks and regression history
+
+There are two explicit modes:
+
+- **Explore** discovers workloads, generates/revises tests, and runs independent design reviews and candidate/trusted evaluators. “Saved tests” seeds further exploration; the generator can revise them.
+- **Regression** executes a frozen benchmark against a new source snapshot and compares its outcomes with a selected historical run. It makes no generation calls, does not edit scenarios or assertions, and uses the exact saved trusted evaluator. Its single trusted execution lane compares against historical evidence; it does not pretend to perform new design reviews or establish a causal explanation.
+
+After an execution campaign finishes, select **Freeze selected round** in the web dashboard, or **Freeze latest valid trusted round** in Desktop. Only a trusted execution with complete scenario coverage, matching input hashes and a passing evidence audit can establish a benchmark. A valid run may contain failed task assertions: that is a useful baseline for measuring improvements.
+
+Each benchmark has a content-based ID covering its repository, runtime, scenario files, schema and evaluator. Changed assertions or evaluator code create a different benchmark version. Every finished campaign is indexed, including ordinary exploration runs, invalid executions and design-only attempts. Records are separate files so concurrent workers do not overwrite a shared index. Use **Import earlier runs** to backfill campaigns saved before version 0.2.0; legacy reports without sufficient input provenance cannot become baselines.
+
+The benchmark also retains hashed copies of its original dataset manifest, proposals and review decisions where available. Regression runs reuse that saved provenance; they do not silently substitute newly fetched datasets or claim fresh reviewer approval.
+
+```bash
+hermes reliability history --refresh
+hermes reliability freeze CAMPAIGN_ID --round-number 1
+# Use the full benchmark_id and baseline_run_id returned above:
+hermes reliability start /absolute/path/to/my-agent --runtime hermes \
+  --mode regression --benchmark-id BENCHMARK_ID --baseline-run-id RUN_ID --execute
+hermes reliability compare BASELINE_RUN_ID CURRENT_RUN_ID
+```
+
+The dashboard offers benchmark and baseline selectors, saved-run inspection, and comparison results. Regressions, improvements and unchanged outcomes are reported only when benchmark versions and recorded model/runtime settings match and both runs retain valid evidence. Changed models, endpoint URLs, budgets, runtime images or adapter implementations are labeled **incomparable**; missing, changed or invalid evidence is labeled **invalid**. Source revision is the intended variable and can differ. These are observed outcomes, not statistical significance from a single rerun. Installed dependencies and provider-side changes are not fully captured by configuration equality.
+
+Fixed-benchmark execution works through any configured adapter that supplies the required evidence contract. The older exploration workflow that executes both old and new source checkouts in one campaign remains Hermes-specific.
+
+## Remembering baselines with Hermes
+
+Ask Hermes: **“Freeze this campaign as a regression benchmark and remember its baseline.”** The plugin validates the saved run and returns a compact reference containing repository, runtime, benchmark ID and baseline-run ID. Hermes then uses its **native `memory` tool** to save that note in the active profile. `reliability_memory` can prepare the same note for an existing baseline. At the next session, Hermes can resolve those IDs through `reliability_history` when you ask to check changes against the same benchmark.
+
+Exact benchmarks, reports and traces remain in plugin storage. Memory holds references, not test answers or raw logs. A remembered baseline does not authorize execution: the usual explicit execution request and configured runtime are still required. Background workers retrieve the pinned records directly and do not depend on a conversational memory snapshot.
+
+The web and Desktop **Prepare memory note** action produces a request to send to Hermes; it does not claim to write memory. Likewise, `hermes reliability memory-note BENCHMARK_ID RUN_ID` or `freeze … --remember` returns arguments for the native tool. Native memory writes require a live Hermes agent session and can be staged, disabled or rejected at capacity. The plugin never edits `MEMORY.md` directly, replaces the user's memory provider, or silently removes existing notes. Verify the native tool's result before treating a note as saved. Stale or foreign-profile references fail rather than selecting another baseline.
+
+The tested agent's memory stays separate from these operator notes. The current Hermes evaluation harness starts with isolated target profiles and memory disabled; testing the target's memory behavior requires an explicit adapter/scenario implementation with controlled seeding and reset semantics.
 
 ## Dataset grounding
 
@@ -124,7 +160,7 @@ See [runtime integration](docs/runtime-integration.md) for the custom adapter co
 
 ## Evidence and privacy
 
-State lives under `<active Hermes home>/plugin-data/hermes-reliability/`, outside the plugin install directory. Each job has its configuration, a frozen and hash-checked controller snapshot, and worker log; each campaign has private source snapshots, dataset provenance, generated scenarios, review decisions, candidate/trusted evaluator snapshots, execution reports, and causal analysis. Evidence reads are bounded and confined to the selected campaign. The web dashboard uses Hermes authentication and the documented dashboard SDK; it exposes no separate unauthenticated listener.
+State lives under `<active Hermes home>/plugin-data/hermes-reliability/`, outside the plugin install directory. Each job has its configuration, a frozen and hash-checked controller snapshot, and worker log; each campaign has private source snapshots, dataset provenance, scenarios, review decisions where applicable, evaluator snapshots, execution reports, and analysis or regression comparisons. `benchmarks/<id>/` stores frozen evaluator/scenario snapshots and `history/<run-id>.json` stores execution references, hashes, validity and summaries. Original evidence remains with its campaign and must be retained for comparison. Evidence reads are bounded and confined to the selected campaign. The web dashboard uses Hermes authentication and the documented dashboard SDK; it exposes no separate unauthenticated listener.
 
 Source excerpts, sampled dataset user messages, and campaign evidence are sent to the configured model provider during orchestration. Public catalogues receive search queries; Git contacts the requested repository. Target execution may incur separate model costs. Recognized credential values are redacted, but repository and task contents can still be sensitive. Nothing uploads campaigns or findings to Cornell, GitHub, or a marketplace automatically.
 

@@ -9,6 +9,22 @@ from tests.helpers import FakeAgent, RegistryTestCase
 
 
 class UtilsTests(RegistryTestCase):
+    def test_unauthenticated_target_does_not_fall_back_to_host_credentials(self):
+        class Agent:
+            def __init__(self, api_key=None, provider=None, base_url=None):
+                self.api_key, self.provider, self.base_url = api_key, provider, base_url
+
+        with patch.object(utils, "AIAgent", Agent):
+            anonymous = utils.instantiate_hermes_agent("http://localhost:1234/v1", "test", "", 3)
+            self.assertEqual(
+                ("unused", "custom", "http://localhost:1234/v1"),
+                (anonymous.api_key, anonymous.provider, anonymous.base_url),
+            )
+            explicit = utils.instantiate_hermes_agent(
+                "https://model.test/v1", "test", "target-key", 3
+            )
+            self.assertEqual("target-key", explicit.api_key)
+
     def test_bridge_extraction_preserves_order_arguments_and_rejects_malformed(self):
         entries = [
             {"name": "get_event", "arguments": {}},

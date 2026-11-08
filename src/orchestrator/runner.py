@@ -1522,6 +1522,7 @@ def run(
                     ignore=shutil.ignore_patterns("__pycache__", "scenarios"),
                 )
                 shutil.copytree(candidate / "scenarios", lane_root / "evaluator/scenarios")
+                save(lane_root / "execution_input_hashes.json", revision_hashes(lane_root / "evaluator"))
                 result = lane_adapter.execute_revision(
                     lane_root / "evaluator", lane_root / "execution", config["target"], target_key
                 )

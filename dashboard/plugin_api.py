@@ -40,6 +40,11 @@ def campaigns():
     return Service().list()
 
 
+@router.get("/history")
+def history():
+    return Service().history.list()
+
+
 @router.get("/campaign/{campaign_id}")
 def detail(campaign_id: str):
     try:
@@ -74,6 +79,16 @@ async def action(action: str, request: Request):
             return obj.start(value)
         if action == "stop":
             return obj.stop(campaign_id=value.get("id"), job_id=value.get("job_id"))
+        if action == "freeze":
+            return obj.promote(
+                value["campaign_id"], value.get("round_number"), value.get("remember", False)
+            )
+        if action == "compare":
+            return obj.history.comparison(value["baseline_run_id"], value["current_run_id"])
+        if action == "memory-note":
+            return obj.history.memory_note(value["benchmark_id"], value["baseline_run_id"])
+        if action == "index-history":
+            return obj.history.list(refresh=True)
         raise HTTPException(404, "Unknown action")
     except (ValueError, OSError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc

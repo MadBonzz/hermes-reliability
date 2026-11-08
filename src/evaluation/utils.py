@@ -243,7 +243,10 @@ def instantiate_hermes_agent(base_url, model_name, api_key, max_iterations, work
         "model": model_name,
         "provider": "custom",
         "base_url": base_url,
-        "api_key": api_key,
+        # Hermes treats an empty key as a request to resolve ambient provider
+        # credentials. A configured unauthenticated endpoint needs an explicit
+        # nonsecret placeholder instead; never fall back to the operator's account.
+        "api_key": api_key or "unused",
         "api_mode": "chat_completions",
         "max_iterations": max_iterations,
         "quiet_mode": True,

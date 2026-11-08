@@ -11,7 +11,7 @@
       const handle = async (event) => {
         if (event.origin !== location.origin || event.source !== ref.current?.contentWindow || event.data?.type !== 'reliability.request') return;
         const {id, path, body} = event.data;
-        if (!/^\/(defaults|campaigns|campaign\/[a-f0-9]+|start|stop)$/.test(path)) return;
+        if (!/^\/(defaults|campaigns|history|campaign\/[a-f0-9]+|start|stop|freeze|compare|memory-note|index-history)$/.test(path)) return;
         try {
           const value = await SDK.fetchJSON(BASE + path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
           event.source.postMessage({type:'reliability.response', id, value}, location.origin);

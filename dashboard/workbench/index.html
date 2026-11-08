@@ -19,6 +19,13 @@
     <header class="topbar"><span>WORKSPACE <span class="slash">/</span> <strong>Reliability experiments</strong></span><span id="connection" role="status">Connecting…</span></header>
     <div id="banner" role="status" hidden></div>
     <section id="job-panel" class="panel" hidden><div class="panel-heading"><h2>Recent launches</h2><span class="muted">Saved across browser sessions</span></div><div id="jobs"></div></section>
+    <section class="panel"><div class="panel-heading"><h2>Benchmarks &amp; run history</h2><button id="index-history" class="secondary">Import earlier runs</button></div>
+      <p class="muted">Freeze an audited trusted execution to keep its scenarios and evaluator unchanged across reruns.</p>
+      <div id="benchmarks"></div><details><summary>Saved execution attempts</summary><div id="run-history"></div>
+      <div class="form-row"><label>Baseline run<select id="compare-base"></select></label><label>Current run<select id="compare-current"></select></label></div>
+      <button id="compare-runs" class="secondary">Compare runs</button><div id="history-comparison"></div></details>
+      <details id="memory-note" hidden><summary>Remember this baseline in Hermes</summary><p>This prepares a reference; it has not written memory. Send this request to Hermes, which uses its native memory tool and reports whether the write was applied or staged.</p><pre id="memory-request" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details>
+    </section>
     <section id="welcome" class="welcome">
       <span class="eyebrow">FROM SOURCE CODE TO EVIDENCE</span>
       <h1>Find where your<br>agent breaks.</h1>
@@ -30,6 +37,7 @@
       <div class="campaign-header"><div><span class="eyebrow" id="campaign-repository"></span><h1 id="campaign-title"></h1><p id="campaign-models"></p></div><button id="stop" class="secondary danger">Stop at next boundary</button></div>
       <div id="phase-strip" class="phase-strip"></div>
       <div id="stats" class="stats"></div>
+      <section class="panel"><div class="panel-heading"><h2>Regression benchmark</h2><button id="freeze-benchmark" class="secondary">Freeze selected round</button></div><div id="regression-result"></div></section>
       <div class="content-grid">
         <section class="panel activity-panel"><div class="panel-heading"><h2>Live activity</h2><span id="activity-status" class="badge"></span></div><p id="phase-description" class="muted"></p><div id="activity" class="activity"></div></section>
         <section class="panel"><div class="panel-heading"><h2>Iteration history</h2><span class="muted">Independent evaluator runs</span></div><div id="iterations"></div></section>
@@ -46,6 +54,8 @@
     <p class="muted">Provide any agent’s repository or local source directory. The campaign inspects its code and selects relevant datasets before proposing tests.</p>
     <div class="form-row"><label>Runtime<select id="runtime"><option value="hermes">Hermes</option><option value="openhands">OpenHands</option><option value="deerflow">DeerFlow</option><option value="custom" selected>Custom agent</option></select></label><label>Revision <span class="optional">optional</span><input id="revision" placeholder="Default branch, or native image revision"></label></div>
     <label>Repository URL or local source directory<input id="source" required placeholder="https://github.com/NousResearch/hermes-agent.git"></label>
+    <label>Mode<select id="mode"><option value="explore">Explore and refine tests</option><option value="regression">Run a frozen regression benchmark</option></select></label>
+    <div id="regression-selection" hidden><label>Frozen benchmark<select id="benchmark"></select></label><label>Baseline run<select id="baseline"></select></label><p class="hint">Runs the exact saved scenarios and evaluator. No generation or assertion edits. Changed model/runtime settings are reported as incomparable.</p></div>
     <label>Saved tests<select id="prior"><option value="">Start a new test suite</option></select></label>
     <p id="credentials" class="hint"></p>
     <details><summary>Campaign budgets and scope</summary>

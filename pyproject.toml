@@ -1,6 +1,6 @@
 [project]
 name = "hermes-reliability"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hermes plugin for evidence-based agent reliability campaigns"
 readme = "README.md"
 requires-python = ">=3.11"
