@@ -18,7 +18,28 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = None
 model_tools = toolsets = registry = AIAgent = None
 
-EVAL_HERMES_CONFIG = {"agent": {"coding_context": "off", "coding_instructions": ""}}
+EVAL_HERMES_CONFIG = {
+    "agent": {"coding_context": "off", "coding_instructions": ""},
+    "terminal": {
+        "auto_source_bashrc": False,
+        "shell_init_files": ["${HERMES_HOME}/terminal_init.sh"],
+    },
+}
+
+# Hermes initializes its terminal with a login shell, which can replace PATH.
+# Activate the disposable environment after that initialization through Hermes's
+# supported shell-init setting. Resolve it at shell creation, so separate phases
+# can share a profile without sharing packages. Explicit host commands remain
+# possible: this is reproducible environment routing, not an OS sandbox.
+EVAL_TERMINAL_INIT = '''\
+if [ -n "${UV_PROJECT_ENVIRONMENT:-}" ]; then
+    if [ -f "$UV_PROJECT_ENVIRONMENT/bin/activate" ]; then
+        . "$UV_PROJECT_ENVIRONMENT/bin/activate"
+    elif [ -f "$UV_PROJECT_ENVIRONMENT/Scripts/activate" ]; then
+        . "$UV_PROJECT_ENVIRONMENT/Scripts/activate"
+    fi
+fi
+'''
 
 
 @contextmanager
@@ -30,6 +51,7 @@ def hermes_run_environment(home):
     """
     home = Path(home).resolve()
     home.mkdir(parents=True, exist_ok=False)
+    (home / "terminal_init.sh").write_text(EVAL_TERMINAL_INIT, encoding="utf-8")
     (home / "config.yaml").write_text(json.dumps(EVAL_HERMES_CONFIG, indent=2), encoding="utf-8")
     previous = os.environ.get("HERMES_HOME")
     os.environ["HERMES_HOME"] = str(home)

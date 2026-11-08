@@ -69,6 +69,10 @@ class HermesClient:
         if start < 0:
             raise json.JSONDecodeError("No JSON object in response", content, 0)
         value, end = json.JSONDecoder().raw_decode(content, start)
-        if "{" in content[end:] or not isinstance(value, dict):
-            raise ValueError("Expected exactly one JSON object")
+        if "{" in content[end:]:
+            # The controller repairs malformed model output within the same
+            # request budget. Match its standalone client's parse-error contract.
+            raise json.JSONDecodeError("Multiple JSON objects in response", content, end)
+        if not isinstance(value, dict):
+            raise json.JSONDecodeError("Expected a JSON object", content, start)
         return value

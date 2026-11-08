@@ -11,7 +11,7 @@ from src.evaluation.api_trace import SecretRedactor
 from src.evaluation.runtime_support import write_json_atomic
 from src.evaluation.utils import load_eval_config
 from src.orchestrator.dashboard import identity
-from src.orchestrator.runner import CampaignPreempted
+from src.orchestrator.runner import CampaignPreempted, exchange
 from src.plugin.client import HermesClient
 from src.plugin.integration import register
 from src.plugin.service import Service
@@ -313,4 +313,25 @@ class PluginTests(TemporaryDirectoryTestCase):
             client.ask([])
         write_json_atomic(self.root / "stop.json", {"reason": "test"})
         with self.assertRaises(CampaignPreempted):
+            client.ask([])
+
+    def test_host_client_repairs_multiple_objects_through_controller_budget(self):
+        cfg = {"max_request_characters": 30000, "max_output_tokens": 100, "timeout_seconds": 20}
+        malformed = 'Scenario: {"id":"example"}\nActions: {"actions":[]}'
+        llm = Mock()
+        llm.complete.side_effect = [
+            SimpleNamespace(text=text, usage={}, model="active", provider="host", audit={})
+            for text in (malformed, '{"ready":true}')
+        ]
+        client = HermesClient(cfg, self.root, SecretRedactor([]), "", 2, llm=llm)
+        conversation = []
+        self.assertEqual(
+            {"ready": True},
+            exchange(client, None, {"task": "test"}, conversation=conversation),
+        )
+        self.assertIn("Multiple JSON objects", conversation[2]["content"])
+        self.assertEqual(2, client.calls)
+        saved = json.loads((self.root / "api_0001.response.json").read_text())
+        self.assertEqual(malformed, json.loads(saved["body"])["choices"][0]["message"]["content"])
+        with self.assertRaisesRegex(RuntimeError, "budget"):
             client.ask([])

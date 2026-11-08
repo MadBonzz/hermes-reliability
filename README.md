@@ -107,6 +107,8 @@ plugins:
 
 For a hosted target, configure `RELIABILITY_TARGET_API_KEY` through Hermes. The orchestration model's credentials are never extracted or copied. The target adapter receives only the separately configured target credential. An unauthenticated local model server may leave it unset. Target inference currently requires an OpenAI-compatible Chat Completions endpoint; orchestration follows the provider support of Hermes itself.
 
+Cohere Command A was live-tested as a Hermes target with `model: command-a-03-2025` and `base_url: https://api.cohere.ai/compatibility/v1`. Native file-tool execution and evidence audits passed a small operator-authored smoke. Using the same model for orchestration did not complete autonomous scenario generation; see the [live verification results](docs/verification.md#live-cohere-command-a-verification) before treating this as an end-to-end validated model choice.
+
 Then explicitly request execution through the dashboard checkbox, the `execute` tool parameter, or:
 
 ```bash
