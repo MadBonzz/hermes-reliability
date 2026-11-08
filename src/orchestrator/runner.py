@@ -21,9 +21,17 @@ from src.evaluation.evaluation_metrics import api_metrics
 from src.evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
 from src.evaluation.utils import load_eval_config
 from src.orchestrator.adapters import ROOT, make_adapter, revision_hashes
+from src.orchestrator.datasets import (
+    discover,
+    recovered_manifest,
+    validate_profile,
+    validate_selection,
+)
 from src.orchestrator.prompts import (
     ANALYSIS_REQUIREMENTS,
     ANALYSIS_TASK,
+    DATASET_PROFILE_TASK,
+    DATASET_SELECTION_TASK,
     DESIGN_REQUIREMENTS,
     GENERATION_TASK,
     POLICY,
@@ -45,6 +53,7 @@ from src.orchestrator.prompts import (
 from src.orchestrator.quality import (
     validate_analysis,
     validate_assessments,
+    validate_dataset_grounding,
     validate_design,
     validate_proposal,
     validate_review,
@@ -53,6 +62,13 @@ from src.orchestrator.quality import (
 )
 from src.orchestrator.regression_index import lookup as index_lookup
 from src.orchestrator.regression_index import record as index_record
+from src.orchestrator.source import (
+    is_git,
+    read_source,
+    snapshot_directory,
+    source_files,
+    verify_snapshot,
+)
 from src.orchestrator.transcripts import export_execution
 from src.orchestrator.workspace import Workspace
 
@@ -370,17 +386,7 @@ def exchange(
                                     "Source search needs nonempty query, offset >= 0 and limit > 0"
                                 )
                             if source_paths is None:
-                                source_paths = (
-                                    subprocess.run(
-                                        ["git", "-C", str(source), "ls-files", "-z"],
-                                        check=True,
-                                        capture_output=True,
-                                        text=True,
-                                        encoding="utf-8",
-                                    )
-                                    .stdout.rstrip("\0")
-                                    .split("\0")
-                                )
+                                source_paths = source_files(source)
                             matches = [p for p in source_paths if term.casefold() in p.casefold()]
                             results.append(
                                 {
@@ -388,17 +394,11 @@ def exchange(
                                     "paths": matches[offset : offset + limit],
                                     "total": len(matches),
                                     "has_more": offset + limit < len(matches),
-                                    "scope": "Tracked path names only; read source content before citing architecture.",
+                                    "scope": "Source inventory paths only; read source content before citing architecture.",
                                 }
                             )
                             continue
-                        path = (source / query["path"]).resolve()
-                        if (
-                            not path.is_relative_to(source)
-                            or ".git" in path.relative_to(source).parts
-                            or path.suffix not in {".py", ".md", ".toml", ".yaml", ".json"}
-                        ):
-                            raise ValueError("Source read outside allowed repository files")
+                        path = read_source(source, query["path"])
                         eid = evidence.add(path)
                         results.append({"query": query, **evidence.read({**query, "id": eid})})
                     except (
@@ -481,16 +481,31 @@ def exchange(
 
 def prepare_source(config, output):
     source_config = config["source"]
+    local = source_config.get("local_path")
+    if source_config.get("kind") == "directory" and source_config.get("sha256"):
+        source = verify_snapshot(source_config)
+    elif local and (
+        not is_git(local)
+        or (config["adapter"].get("kind") == "custom" and not source_config.get("revision"))
+    ):
+        if source_config.get("revision"):
+            raise ValueError(
+                "A local directory snapshot cannot select a Git revision; use a repository URL to pin a commit"
+            )
+        config["source"] = source_config = snapshot_directory(local, output / "agent_source")
+        source = Path(source_config["local_path"])
+    else:
+        source = _checkout(
+            source_config["repository"],
+            source_config.get("revision"),
+            local or output / "agent_source",
+        )
+        source_config["revision"] = subprocess.check_output(
+            ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+        ).strip()
     repository = source_config["repository"]
     revision = source_config["revision"]
-    source = _checkout(
-        repository, revision, source_config.get("local_path", output / "agent_source")
-    )
-    paths = (
-        subprocess.check_output(["git", "-C", str(source), "ls-files", "-z"], text=True)
-        .rstrip("\0")
-        .split("\0")
-    )
+    paths = source_files(source)
     save(
         output / "agent_source.json",
         {"repository": repository, "revision": revision, "files": paths},
@@ -503,13 +518,14 @@ def _checkout(repository, revision, path):
     path = Path(path).resolve()
     if not path.exists():
         subprocess.run(["git", "clone", "--depth", "1", repository, str(path)], check=True)
-        subprocess.run(["git", "-C", str(path), "fetch", "origin", revision], check=True)
-        subprocess.run(["git", "-C", str(path), "checkout", "--detach", revision], check=True)
+        if revision:
+            subprocess.run(["git", "-C", str(path), "fetch", "origin", revision], check=True)
+            subprocess.run(["git", "-C", str(path), "checkout", "--detach", revision], check=True)
 
     def git(*args):
         return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
 
-    if git("rev-parse", "HEAD") != revision:
+    if revision and git("rev-parse", "HEAD") != revision:
         raise ValueError(f"Agent revision mismatch at {path}: expected {revision}")
     # A local Git checkout can have no origin. Its file URI identifies that source.
     if repository != path.as_uri() and git("remote", "get-url", "origin").removesuffix(
@@ -637,6 +653,8 @@ def api_usage(directory):
             if task.startswith("Present dashboard findings")
             else "analysis"
             if task.startswith("Analyze")
+            else "dataset_discovery"
+            if task.startswith(("Profile this agent", "Select relevant datasets"))
             else "main",
         )
         group = by_role.setdefault(
@@ -956,7 +974,12 @@ def review_recovery(config, evidence):
 
 
 def run(
-    config, client_factory=Client, adapter_factory=make_adapter, execute=False, on_created=None
+    config,
+    client_factory=Client,
+    adapter_factory=make_adapter,
+    execute=False,
+    on_created=None,
+    dataset_discoverer=None,
 ):
     if {"resume_final_execution_from", "recovery_evaluator_repairs"}.intersection(config):
         raise ValueError(
@@ -975,7 +998,7 @@ def run(
             raise ValueError("Recovery must name a local orchestrator experiment")
     else:
         kind = config.get("adapter", {}).get("kind", "hermes")
-        if kind not in {"hermes", "openhands", "deerflow"}:
+        if kind not in {"hermes", "openhands", "deerflow", "custom"}:
             raise ValueError("Unknown agent runtime")
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         experiment = artifact_root / f"{kind}_{stamp}_{attempt[:8]}"
@@ -984,7 +1007,8 @@ def run(
     values = load_eval_config(ROOT / ".env")
     orch_key = values.get(config["orchestrator"].get("api_key_env", ""), "")
     target_key = values.get(config["target"].get("api_key_env", ""), "")
-    redactor = SecretRedactor([orch_key, target_key])
+    dataset_key = values.get(config.get("dataset_discovery", {}).get("api_key_env", "HF_TOKEN"), "")
+    redactor = SecretRedactor([orch_key, target_key, dataset_key])
     save(output / "config.json", redactor(config))
     evidence = Evidence(redactor)
     state = {
@@ -1035,6 +1059,7 @@ def run(
             raise ValueError("Initial tests exceed active test cap")
         progress("source")
         source = prepare_source(config, output)
+        write_json_atomic(output / "config.json", redactor(config))
         version_mode = bool(config["source"].get("base_revision"))
         version_request, base_adapter, change = None, None, None
         index_path = Path(
@@ -1108,19 +1133,43 @@ def run(
                 "method": "retry_saved_conversation_without_action_replay",
             }
             save(output / "recovery.json", state["recovery"])
+        if config["adapter"].get("kind") == "custom" and config["adapter"].get("factory"):
+            filename, separator, function = config["adapter"]["factory"].rpartition(":")
+            if not separator or not Path(filename).is_absolute() or not function.isidentifier():
+                raise ValueError(
+                    "Custom adapter.factory requires an absolute Python path and callable name"
+                )
+            destination = output / "adapter/factory.py"
+            destination.parent.mkdir()
+            shutil.copyfile(filename, destination)
+            config["adapter"].update(
+                factory=str(destination) + ":" + function, factory_origin=filename
+            )
+            write_json_atomic(output / "config.json", redactor(config))
         adapter = adapter_factory(
             {
                 **config["adapter"],
                 "hermes_root": str(source),
+                "source_root": str(source),
+                "design_only": not execute,
                 "source_revision": config["source"].get("revision"),
                 "target": config["target"],
             }
         )
         workspace.runtime_kind = (
             config["adapter"].get("kind")
-            if config["adapter"].get("kind") in {"openhands", "deerflow"}
+            if config["adapter"].get("kind") in {"openhands", "deerflow", "custom"}
             else "hermes"
         )
+        workspace.reference_tools = getattr(adapter, "reference_tools", None)
+        if (
+            execute
+            and hasattr(adapter, "describe")
+            and adapter.describe().get("execution_available") is False
+        ):
+            raise ValueError(
+                "Custom-agent execution requires a configured adapter.factory; disable execution for scenario design"
+            )
         seed = None
         if config.get("seed_scenarios") and not (recovery or resumed):
             seed = workspace.seed(config["seed_scenarios"], limits["active_tests"])
@@ -1147,6 +1196,80 @@ def run(
         client = client_factory(
             config["orchestrator"], output, redactor, orch_key, limits.get("requests")
         )
+        progress("datasets")
+        dataset_options = config.get("dataset_discovery", {})
+        recovered = (
+            recovered_manifest((resumed or recovery)["prior"]) if resumed or recovery else None
+        )
+        profile = None
+        if (
+            config["adapter"].get("kind") == "custom"
+            and recovered is None
+            and dataset_options.get("enabled", True)
+            and not dataset_options.get("sources")
+        ):
+            profile = exchange(
+                client,
+                evidence,
+                {
+                    "task": DATASET_PROFILE_TASK,
+                    "source_index": source_id,
+                    "source_repository": {
+                        k: v for k, v in config["source"].items() if k != "sha256"
+                    },
+                    "scope": config["scope"],
+                },
+                source=source,
+                readonly=True,
+                journal=output / "dataset_profile_reads.jsonl",
+                response_validator=lambda value: (
+                    validate_profile(value),
+                    validate_proposal(
+                        {
+                            "ready": True,
+                            "rationale": [
+                                {
+                                    "id": "profile",
+                                    "architecture_refs": value.get("architecture_refs", []),
+                                }
+                            ],
+                        },
+                        evidence,
+                        source,
+                    ),
+                ),
+            )
+
+        def choose_datasets(candidates):
+            return exchange(
+                client,
+                evidence,
+                {"task": DATASET_SELECTION_TASK, "profile": profile, "candidates": candidates},
+                readonly=True,
+                source=source,
+                response_validator=lambda value: validate_selection(value, candidates),
+            )
+
+        dataset_material = recovered or (dataset_discoverer or discover)(
+            config,
+            output / "datasets",
+            profile=profile,
+            choose=choose_datasets,
+            environment=values,
+            redact=redactor,
+            check_stop=lambda: check_stop(output),
+        )
+        write_json_atomic(output / "datasets/manifest.json", dataset_material)
+        dataset_id = evidence.add(output / "datasets/manifest.json")
+        dataset_material = {
+            **dataset_material,
+            "evidence_id": dataset_id,
+            "sha256": evidence.items[dataset_id]["sha256"],
+        }
+        state["datasets"] = {
+            "status": dataset_material["status"],
+            "sources": [s["id"] for s in dataset_material["sources"]],
+        }
         previous = (
             json.loads(Path(state["rounds"][-2]["analysis"]).read_text(encoding="utf-8"))
             if resumed and len(state["rounds"]) > 1
@@ -1199,6 +1322,7 @@ def run(
                         ),
                         "scope": config["scope"],
                         "requirements": DESIGN_REQUIREMENTS,
+                        "dataset_sources": dataset_material,
                         "round": index,
                         "generation": generation,
                         "max_active_tests": limit,
@@ -1207,7 +1331,9 @@ def run(
                         "files": workspace.inventory(),
                         "source_index": source_id,
                         "native_tool_catalog": catalog_evidence,
-                        "source_repository": config["source"],
+                        "source_repository": {
+                            k: v for k, v in config["source"].items() if k != "sha256"
+                        },
                         "runtime_contract": adapter.describe()
                         if hasattr(adapter, "describe")
                         else {"framework": config["adapter"].get("kind", "custom")},
@@ -1232,6 +1358,7 @@ def run(
                     continue_pending=bool(recovery and index == 1 and generation == 1),
                     response_validator=lambda value: (
                         validate_proposal(value, evidence, source),
+                        validate_dataset_grounding(value, dataset_material),
                         validate_design(value, workspace.validate(limit))
                         if variant != "baseline"
                         else None,
@@ -1284,6 +1411,7 @@ def run(
                                     else {}
                                 ),
                                 "requirements": DESIGN_REQUIREMENTS,
+                                "dataset_sources": dataset_material,
                                 "scope": config["scope"],
                                 "max_active_tests": limit,
                                 "proposal": plan,
@@ -1474,6 +1602,7 @@ def run(
                     "campaign_recovery": state.get("recovery"),
                     "raw_evidence": {eid: evidence.items[eid] for eid in raw_ids},
                     "review_findings": record["unresolved_review_findings"],
+                    "dataset_sources": dataset_material,
                     "version_change": version_request,
                     "version_differential": differential,
                     "version_analysis_guidance": VERSION_ANALYSIS_GUIDANCE

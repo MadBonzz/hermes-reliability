@@ -9,8 +9,10 @@ variables followed by the repository-root `.env`.
 ## Local dashboard
 
 Run `python -m src.orchestrator.app` and open `http://localhost:8765`.
-The dashboard accepts remote repositories and clean local Git checkouts, clones
-them into owned run storage, and launches a frozen controller in a separate process.
+The dashboard accepts any agent's remote repository or local source directory and
+launches a frozen controller in a separate process. Built-in runtime checkouts are
+cloned and commit-pinned. Custom local working code is copied into a content-hashed
+snapshot, including uncommitted files when no revision is selected.
 It displays source activity, test contracts, reviewer findings, execution lanes,
 iteration analyses and recorded usage. Runtime settings are editable before launch.
 Native Docker images must match the selected source commit.
@@ -21,8 +23,8 @@ bundle when its full source attempt is present. Bundled findings are already cac
 so viewing them makes no provider calls. Launch, stop, retry and scenario-reuse actions
 operate on local campaigns. Raw traces and machine configuration stay in local storage.
 
-The sidebar retains active campaigns and normally completed campaigns whose final
-round has causal findings. Aborted or incomplete historical attempts remain on disk.
+The sidebar retains active campaigns, completed design-only campaigns, and normally
+completed execution campaigns whose final round has causal findings. Aborted or incomplete historical attempts remain on disk.
 While the dashboard is running, `findings.py` prepares each retained analysis for
 display with the campaign's configured orchestrator model. Structured cards cover
 every source finding and unresolved gap, with original attribution, certainty and
@@ -47,11 +49,124 @@ The campaign stop button writes the existing cooperative stop request. Closing t
 dashboard does not terminate its independent worker. `launch.json` records cloning,
 running and terminal launch states, including errors before a campaign is created.
 
+## Dataset discovery
+
+Discovery runs before the first scenario generation. The built-in source sets are
+defined in `src/orchestrator/datasets.py`: Hermes uses AssistantBench and WebLINX;
+OpenHands uses SWE-chat and Pi coding sessions; DeerFlow uses Clem's and Lewis
+Tunstall's ML Intern sessions, WebLINX and AssistantBench. These are workload seeds,
+not universal benchmark suites or claims that all uploads have verified provenance.
+
+For `adapter.kind: "custom"`, a read-only model exchange first profiles the actual
+source and returns a purpose, one to three short public search queries, and verified
+source citations. The controller calls Hugging Face's dataset API (including the
+Agent Traces format filter) and Zenodo's records API. A second exchange selects one
+to four returned IDs with relevance explanations. It cannot invent a selected ID.
+Both model exchanges use the orchestrator connection and count under the
+`dataset_discovery` role in `orchestrator_usage.json`.
+
+The controller inspects selected Hugging Face metadata, revision-pinned cards and
+small viewer samples. When viewer conversion fails, it tries bounded prefixes of
+JSON/JSONL files at the pinned commit. WebLINX instructor requests and supported
+session message formats are extracted without assistant reasoning, tool results or
+benchmark answers. Common credential, email and home-directory patterns are redacted;
+this is not exhaustive de-identification. Dataset content remains untrusted evidence.
+Zenodo results currently supply catalogue metadata, not downloaded archive sessions.
+No dataset scripts are imported or executed.
+
+Each response is bounded to 2 MB; file prefixes to 256 KiB. Each source contributes at
+most four excerpts of 1,600 characters and a 10,000-character card excerpt. This is
+scenario seeding, not exhaustive corpus ingestion or benchmark replay. Fetch times,
+response hashes, provider errors, license metadata and exact sample URLs remain in
+`datasets/requests.json` and `datasets/manifest.json`; custom search candidates are
+saved in `datasets/candidates.json`. Hugging Face viewer rows cannot be commit-pinned,
+so their provenance explicitly distinguishes them from pinned file samples.
+Recovery of an interrupted generation/review reuses its hash-verified dataset
+manifest instead of searching again or changing the saved conversation's source material.
+
+Generation, review and analysis receive the manifest. Every proposal rationale needs
+`workload_source: {"dataset_id": "owner/name", "basis": "sampled_user",
+"sample_index": 0, "adaptation": "..."}`. Other bases are `dataset_card` and `metadata`.
+An architecture-derived test instead supplies `workload_source: {"architecture_reason":
+"..."}`. Validation rejects invented source IDs and nonexistent sample/card citations;
+reviewers assess actual relevance and the quality of the adaptation.
+
+Public searches need no search-service credentials. `HF_TOKEN` is optional and is sent
+only to Hugging Face; it does not grant access to gates your account has not accepted.
+Unavailable samples remain visibly `card_only` or `metadata_only`. Partial availability
+marks discovery `degraded`; no inspectable selected sources stops the campaign. Sources
+are never silently replaced with AssistantBench.
+
+Optional JSON configuration:
+
+```json
+"dataset_discovery": {
+  "enabled": true,
+  "api_key_env": "HF_TOKEN",
+  "sources": ["SALT-NLP/SWE-chat", "badlogicgames/pi-mono"]
+}
+```
+
+Omit `sources` for runtime defaults or custom-agent search. An explicit nonempty list
+of up to six Hugging Face IDs overrides either path. Set `enabled: false` only for
+intentional offline/source-only design; the saved manifest marks discovery disabled.
+
+## Custom-agent execution
+
+Use `adapter.kind: "custom"` for any framework. The dashboard supports source-based
+scenario design without an execution adapter. The CLI equivalent is:
+
+```sh
+uv run --locked python -m src.orchestrator --config orchestrator.custom.example.json
+```
+
+Replace the example's `source.local_path` with your code directory. To use a remote
+repository, replace `source` with `{"repository": "https://github.com/OWNER/AGENT.git"}`;
+an optional full `revision` pins a particular commit. The resolved commit is saved.
+Local snapshots exclude dependency/build directories, environment files, private-key
+files and symlinks, and are limited to 20,000 files / 100 MB. Source reads support common
+Python, JavaScript/TypeScript, Go, Rust, JVM, C/C++ and other text/code formats up to 2 MB.
+Snapshots are verified on reuse and the user's directory is never edited.
+
+For execution, configure `adapter.factory: "/absolute/path/integration.py:create_adapter"`
+and add `--execute`, or enter the factory in the dashboard and enable execution.
+The controller copies that Python file into the attempt, records its hash, and loads
+the named factory with an adapter configuration dictionary containing `source_root`,
+`source_revision`, `target` and any user-supplied adapter settings. Dependencies must
+be installed in the controller's Python environment; sibling integration files are
+not automatically bundled. The factory is trusted host code supplied by the operator,
+never generated or installed from dataset content or model output.
+
+The returned object implements:
+
+| Method | Contract |
+|---|---|
+| `describe()` | JSON object with `framework`, a `reference_tools` list of native names, and guidance about supported tools, arguments, state/checkpoint behavior and constraints. |
+| `preflight(evaluator: Path, output: Path)` | Validate the supplied evaluator, its regression tests, authored references and supported execution capabilities; save evidence under `output`; return a dictionary with a boolean `passed`. |
+| `execute_revision(evaluator: Path, output: Path, target: dict, key: str)` | Execute the supplied evaluator/scenarios against the configured source and model, save `output/report.json` and raw evidence, and return an execution result with a matching `status`. |
+
+Use the existing adapters and [BENCHMARK.md](BENCHMARK.md) as the report/evidence
+reference. A complete report covers each active scenario exactly once, has branch or
+failed-prefix records, and includes phase API traces, tool/turn traces, snapshots and
+checks in the existing benchmark format. The wrapper checks schema and declared tool
+names, rejects evaluator mutation, and checks report completeness. The normal independent
+evidence audit still runs; invalid or incomplete evidence blocks a convergence claim.
+The adapter must honor the passed evaluator path so candidate/trusted lanes remain
+independent. It must reject unsupported perturbations, checkpointing or checks during
+preflight instead of pretending to support them. Custom execution does not inherit the
+built-in Docker isolation automatically.
+
+Source-only design defers native reference-tool validation until an adapter declares
+its tools; it does not claim those references executed. The direct static-benchmark CLI
+(`src.evaluation.evaluate`) retains its three built-in runtime choices. Custom integrations
+use the orchestrator. Cross-version execution comparison currently remains Hermes-only.
+
 ## Campaign lifecycle
 
 1. Fetch or verify the configured clean agent checkout. The inspected source and
    executed runtime use the same commit. Index its files for scoped source reads.
-2. Create an editable evaluator workspace and a frozen original evaluator copy.
+2. Discover and inspect workload datasets before generation, and create an editable
+   evaluator workspace and a frozen original evaluator copy.
    New suites begin with an empty scenario directory. A seeded campaign imports
    its explicitly selected earlier scenarios and evidence.
 3. The main agent reads source and writes up to five initial scenario JSON files

@@ -22,6 +22,10 @@
     "max_iterations": 15,
     "request_interval": 0
   },
+  "dataset_discovery": {
+    "enabled": true,
+    "api_key_env": "HF_TOKEN"
+  },
   "limits": {
     "rounds": 3,
     "initial_tests": 5,

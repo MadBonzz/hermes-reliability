@@ -36,8 +36,10 @@ def _portable_tools(spec, runtime_kind):
     return allowed
 
 
-def validate_benchmark(suite, schema, *, require_portable_prefix=True, runtime_kind="hermes"):
-    validate_suite(suite, schema, runtime_kind=runtime_kind)
+def validate_benchmark(
+    suite, schema, *, require_portable_prefix=True, runtime_kind="hermes", reference_tools=None
+):
+    validate_suite(suite, schema, runtime_kind=runtime_kind, reference_tools=reference_tools)
     for spec in suite["scenarios"]:
         complexity = spec["complexity"]
         if complexity["turns"] != len(spec["turns"]):
@@ -60,7 +62,10 @@ def validate_benchmark(suite, schema, *, require_portable_prefix=True, runtime_k
         if base == condition_spec(spec, "treatment"):
             raise ValueError("Controlled pair must define a distinct intervention")
         validate_suite(
-            {"suite_name": "baseline", "scenarios": [base]}, schema, runtime_kind=runtime_kind
+            {"suite_name": "baseline", "scenarios": [base]},
+            schema,
+            runtime_kind=runtime_kind,
+            reference_tools=reference_tools,
         )
         for original, variant in zip(spec["turns"], base["turns"], strict=True):
             if original["prompt"] != variant["prompt"]:

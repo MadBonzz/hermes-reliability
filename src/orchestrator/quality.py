@@ -213,6 +213,33 @@ def validate_proposal(plan, evidence, source):
             )
 
 
+def validate_dataset_grounding(plan, manifest):
+    if manifest.get("status") == "disabled":
+        return
+    sources = {s["id"]: s for s in manifest["sources"]}
+    for row in plan["rationale"]:
+        grounding = row.get("workload_source")
+        if not isinstance(grounding, dict):
+            raise ValueError(
+                "Every rationale needs workload_source with dataset_id, basis and adaptation, or architecture_reason"
+            )
+        if grounding.get("architecture_reason"):
+            _text(grounding["architecture_reason"], "architecture_reason")
+            continue
+        source = sources.get(grounding.get("dataset_id"))
+        if source is None:
+            raise ValueError("workload_source.dataset_id must identify an inspected dataset")
+        _text(grounding.get("adaptation"), "workload adaptation")
+        if grounding.get("basis") == "sampled_user":
+            index = grounding.get("sample_index")
+            if type(index) is not int or not 0 <= index < len(source.get("samples", [])):
+                raise ValueError("sampled_user needs a valid sample_index from that dataset")
+        elif grounding.get("basis") not in {"dataset_card", "metadata"}:
+            raise ValueError("workload_source.basis must be sampled_user, dataset_card or metadata")
+        elif grounding["basis"] == "dataset_card" and not source.get("card_excerpt"):
+            raise ValueError("Cannot cite a dataset card that was not fetched")
+
+
 def validate_version_plan(plan, changed_files):
     """Version mode: every test names its change target, property layer and predictions."""
     from src.orchestrator.prompts import PREDICTED_OUTCOMES, PROPERTY_LAYERS

@@ -50,8 +50,8 @@ class QualityTests(unittest.TestCase):
         )
         messages = []
         evidence = Evidence(lambda value: value)
-        with patch("src.orchestrator.runner.subprocess.run") as run:
-            run.return_value.stdout = "a/middleware.py\0b/middleware.py\0other.py\0"
+        with patch("src.orchestrator.runner.source_files") as inventory:
+            inventory.return_value = ["a/middleware.py", "b/middleware.py", "other.py"]
             exchange(
                 SimpleNamespace(ask=lambda _: next(replies)),
                 evidence,
@@ -59,7 +59,7 @@ class QualityTests(unittest.TestCase):
                 source=ROOT,
                 conversation=messages,
             )
-        run.assert_called_once()
+        inventory.assert_called_once_with(ROOT)
         results = [
             json.loads(m["content"])
             for m in messages

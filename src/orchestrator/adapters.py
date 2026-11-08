@@ -172,6 +172,9 @@ class ContainerAdapter(HermesAdapter):
         super().__init__(config)
         if config["kind"] not in {"openhands", "deerflow"}:
             raise ValueError("Unsupported native framework")
+        if config.get("design_only"):
+            self.config["runtime_image"] = config.get("runtime_image")
+            return
         image = config["runtime_image"]
         if not image or image.startswith("-"):
             raise ValueError("Invalid runtime image")
@@ -240,6 +243,10 @@ class ContainerAdapter(HermesAdapter):
         kind = self.config["kind"]
         return {
             "framework": kind,
+            "execution_available": not self.config.get("design_only", False),
+            "contract_scope": "Static adapter contract; source-only design does not verify a runtime image or execute references"
+            if self.config.get("design_only")
+            else "Pinned image verified against the inspected source revision",
             "source_revision": self.config["source_revision"],
             "runtime_image": self.config["runtime_image"],
             "native_entry_point": "SDK Conversation, CLI preset"
@@ -348,6 +355,10 @@ class ContainerAdapter(HermesAdapter):
 
 
 def make_adapter(config):
+    if config["kind"] == "custom":
+        from src.orchestrator.custom_adapter import CustomAdapter
+
+        return CustomAdapter(config)
     if config["kind"] == "hermes":
         return HermesAdapter(config)
     if config["kind"] in {"openhands", "deerflow"}:

@@ -264,6 +264,7 @@ class VersionRunTests(unittest.TestCase):
             index = root / "eval_harness/regression_index.json"
             config = {
                 "scope": "test",
+                "dataset_discovery": {"enabled": False},
                 "source": {"base_revision": change["base_revision"]},
                 "orchestrator": {},
                 "target": {},

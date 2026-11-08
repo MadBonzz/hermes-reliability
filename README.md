@@ -1,12 +1,14 @@
 # Agent Reliability Lab
 
-An agent that designs experiments for other agents. Point it at a supported agent's
-repository, watch it generate and review realistic tasks, then inspect what happened
+An agent that designs experiments for other agents. Point it at **any agentic system's
+repository or local source directory**, watch it generate and review realistic tasks, then inspect what happened
 when the agent encountered changing state, failed tools, untrusted content, or interrupted work.
 
-The local dashboard follows the full loop — source inspection, scenario generation,
+The local dashboard follows the full loop — source inspection, dataset discovery, scenario generation,
 three independent reviewers, execution, causal analysis, and the next iteration.
-It supports **Hermes, OpenHands, and DeerFlow**, plus comparisons between Hermes revisions.
+Scenario design and review are framework-independent. **Hermes, OpenHands, and DeerFlow**
+have built-in execution adapters; other systems connect through a custom execution
+adapter. Hermes also supports comparisons between framework revisions.
 
 ## 1. Install
 
@@ -81,6 +83,20 @@ require a matching rebuilt image and may need adapter updates.
 For these runtimes, use this project's `.venv` Python as **Runtime Python**.
 The dashboard fills settings from earlier local campaigns when available.
 
+### Other agentic systems
+
+Choose **Custom agent** and supply a repository URL or local code directory. No Git
+history is required for local code. The campaign takes a private content-hashed snapshot;
+local Git directories without a selected revision include working changes and untracked
+files. Dependency directories, `.env` files, private-key files and symlinks are excluded.
+Remote Git repositories are cloned and pinned to the resolved commit.
+
+You can generate and review scenarios immediately with **Execute generated tests**
+unchecked. To run them against your framework, provide a trusted Python adapter factory
+such as `/absolute/path/adapter.py:create_adapter`. This supplies the framework's launch,
+tool, state and trace integration. A source path alone does not define those runtime
+interfaces. See [the custom adapter contract](ORCHESTRATOR.md#custom-agent-execution).
+
 ## 3. Open the dashboard
 
 ```sh
@@ -89,10 +105,11 @@ uv run --locked python -m src.orchestrator.app
 
 Open **http://localhost:8765**. Use `--port 8766` if that port is occupied.
 
-1. Click **New campaign** and choose Hermes, OpenHands, or DeerFlow.
-2. Enter a repository URL or a clean local Git checkout. Remote repositories are
-   cloned automatically. A local checkout is cloned into campaign-owned storage.
-3. Configure the runtime Python and, for OpenHands/DeerFlow, the Docker image.
+1. Click **New campaign** and choose a built-in runtime or **Custom agent**.
+2. Enter a repository URL or local source directory. Built-in execution adapters
+   require a clean Git checkout matching the runtime; custom agents also accept local working code.
+3. Configure runtime execution if needed: Python for Hermes, a matching Docker image
+   for OpenHands/DeerFlow, or a custom adapter factory. Leave execution unchecked for scenario design.
 4. Choose an earlier campaign to reuse its tests, or choose **Start a new test suite**.
 5. Review the model settings and budgets, then click **Launch campaign**.
 
@@ -102,10 +119,10 @@ credential-variable names, scope, approval mode, and budgets are editable under
 twelve active tests, three generations per round, and three execution rounds.
 A seeded campaign can begin with up to twelve existing tests.
 
-The dashboard shows source reads and edits, readable scenario cards with actual
+The dashboard shows selected datasets and their sample availability, source reads and edits, readable scenario cards with actual
 user turns and checks, reviewer findings, results by evaluator and condition, and
 causal findings. The sidebar shows active campaigns and completed campaigns with
-final causal findings. The dashboard prepares readable finding cards using an additional
+final causal findings, plus completed scenario-design campaigns. The dashboard prepares readable finding cards using an additional
 call to that campaign's orchestrator model for each analyzed round. It caches the result
 and records the additional requests and tokens. Each card retains its original findings,
 attribution and citations. **Stop at next boundary**
@@ -121,7 +138,40 @@ If the matching full campaign exists on your machine, the sidebar shows that loc
 Generated evaluator code and Hermes tools execute on the host. OpenHands and
 DeerFlow task tools execute in nonroot containers without host mounts or network
 access. Model API calls are relayed by the host and billed to your provider account.
-The dashboard binds to localhost and uses a session token for launch/stop requests.
+Custom adapters define their own execution environment. The dashboard binds to localhost
+and uses a session token for launch/stop requests.
+
+### Workload-specific scenario sources
+
+Before the first scenario-generation request, the campaign fetches relevant dataset
+cards and small user-request samples. Each runtime has a different default source set:
+
+| Agent | Sources | Workload |
+|---|---|---|
+| Hermes | [AssistantBench](https://huggingface.co/datasets/AssistantBench/AssistantBench), [WebLINX](https://huggingface.co/datasets/McGill-NLP/WebLINX) | Personal assistance, conversational browsing and research |
+| OpenHands | [SWE-chat](https://huggingface.co/datasets/SALT-NLP/SWE-chat), [Pi sessions](https://huggingface.co/datasets/badlogicgames/pi-mono) | Coding conversations, debugging and repository changes |
+| DeerFlow | [Clem's ML Intern sessions](https://huggingface.co/datasets/clem/ml-intern-sessions), [Lewis Tunstall's sessions](https://huggingface.co/datasets/lewtun/ml-intern-sessions), WebLINX, AssistantBench | Research, ML engineering and information synthesis |
+| Custom agent | Source-guided searches of Hugging Face datasets, its [Agent Traces catalogue](https://huggingface.co/datasets?format=format%3Aagent-traces), and Zenodo | Workflows inferred from the agent's actual source and campaign scope |
+
+For custom agents, the orchestrator first reads source to identify the workload and
+form short search queries, calls the public catalogue APIs, and selects relevant results.
+No paid search-service key is required. An optional `HF_TOKEN` in `.env` enables dataset
+access granted to your Hugging Face account; gated sources still require that account's approval.
+
+The generator and all three reviewers receive the selected sources, access limitations,
+and available excerpts. Each scenario rationale records its dataset and adaptation, or
+explains why it comes directly from the architecture. The sources seed synthetic tasks
+and independent checks; their recorded answers or reasoning are not correctness oracles.
+AssistantBench contains benchmark tasks, WebLINX human demonstrations, and session-upload
+provenance varies by source. These are not interchangeable kinds of real-user evidence.
+
+Campaigns save `datasets/manifest.json`, request metadata/hashes and custom-search candidates.
+Hugging Face cards and JSONL samples use pinned revisions. Viewer samples record their
+fetch time, split and row because that API does not pin rows to a commit. Gated or unsupported
+samples appear as card-only or metadata-only evidence. If no selected source can be inspected,
+the campaign stops with an explicit discovery error. It never substitutes AssistantBench
+for an unavailable coding or custom-agent source. See [discovery settings](ORCHESTRATOR.md#dataset-discovery)
+to override sources or deliberately run offline without discovery.
 
 ### Local models and other APIs
 
