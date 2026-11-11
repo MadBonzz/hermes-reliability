@@ -1,7 +1,7 @@
-# Orchestrator in the Hermes plugin
+# Reliability Lab campaign engine
 
-The campaign engine is now exposed through the native Hermes integration. Start with [README.md](README.md); configure target execution using [runtime integration](docs/runtime-integration.md).
+Start campaigns through the native Hermes integration. See the [README](README.md) for installation and workflows, and [runtime integration](docs/runtime-integration.md) for target setup.
 
-The source preparation, dataset selection, independent generation/review contexts, candidate/trusted evaluator lanes, schema guards, evidence hashes, audits, and causal analysis remain implemented in `src/orchestrator/` and `src/evaluation/`. Generated suites start empty and are private to each campaign. The original 109-scenario benchmark and its saved examples are deliberately absent from this branch.
+`src/orchestrator/` implements source preparation, dataset discovery, scenario generation, independent reviewer contexts and evidence-based analysis. `src/evaluation/` supplies scenario validation, runtime execution and evidence audits. Exploration compares candidate and frozen trusted evaluators; fixed regression executes a saved benchmark against a selected historical baseline.
 
-Use `hermes reliability start`, the `reliability_start` tool, or the Reliability Lab dashboard tab. The retired standalone HTTP server, repository `.env` setup and provider-specific dashboard defaults are not part of the plugin.
+Use `hermes reliability start`, the `reliability_start` tool, or the Reliability Lab dashboard tab. The active Hermes profile supplies the orchestration model, authentication and campaign storage. Each job freezes its controller code and source snapshot, and retains the configuration and evidence needed to inspect its result.

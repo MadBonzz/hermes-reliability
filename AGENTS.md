@@ -1,6 +1,6 @@
-# Working on the Hermes plugin branch
+# Developing Hermes Reliability Lab
 
-This branch packages the reliability orchestrator and dashboard as a native Hermes plugin. Do not restore the original 109 scenarios, suite lists, sample campaign exports, or historical run evidence. The user explicitly requested a plugin-only branch. Keep changes on `codex/hermes-reliability-plugin` in the Cornell Enterprise remote; do not push public origin or modify main.
+Reliability Lab is a native Hermes plugin with a campaign orchestrator, evaluator adapters, web dashboard and Desktop page. Keep generated scenarios, campaign evidence, credentials and local runtime state outside the source tree. Use focused branches and preserve the evidence and execution contracts below.
 
 ## Layout
 

@@ -8,7 +8,7 @@
   "manifest_version": 2,
   "api_version": 1,
   "requires_hermes": ">=0.21.5",
-  "homepage": "https://github.coecis.cornell.edu/sj945/agent-regression/tree/codex/hermes-reliability-plugin",
+  "homepage": "https://github.com/MadBonzz/hermes-reliability",
   "tags": [
     "evaluation",
     "reliability",

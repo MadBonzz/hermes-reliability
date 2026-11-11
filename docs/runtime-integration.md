@@ -1,6 +1,6 @@
 # Target integration and scope
 
-The plugin retains the lab's generated-scenario contract and evaluator. It does not bundle authored benchmark inputs. Orchestration uses Hermes's public model API; target execution is a separate adapter boundary.
+Reliability Lab uses a structured scenario contract and evaluator to test configured agents. Orchestration uses Hermes's public model API; runtime adapters connect the target under test.
 
 ## Built-in targets
 

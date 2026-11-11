@@ -1,7 +1,7 @@
 # Verification of the plugin branch
 
 Verified on 2026-11-08 with Python 3.14.9 and Hermes source commit
-`acdc8f1ba65c0231ae8277e846a4d55928913991`. The official security plugin was used as a reference for packaging and dashboard loading, not copied as the campaign engine.
+`acdc8f1ba65c0231ae8277e846a4d55928913991`.
 
 | Check | Result |
 |---|---|
@@ -15,7 +15,6 @@ Verified on 2026-11-08 with Python 3.14.9 and Hermes source commit
 | Named profile | Distinct campaign/job store, correct child-worker home and cancellation; job absent from the default profile |
 | Chromium workbench | SDK request bridge, launch validation, disabled execution by default, persisted launches, saved generated scenario, three reviews, design-only findings and explicit saved-test selection |
 | Frozen controller | Separate per-job copy, hashes checked before import and after completion; tampered controller rejected before inference |
-| Removed benchmark data | No tracked `scenarios/`, `suites/`, or `examples/` payloads in the plugin working tree |
 
 The browser used the **real Hermes ASGI server, auth middleware, plugin discovery, assets and backend router**, with a small React shell implementing the documented dashboard SDK contract. The Desktop file passed admission lint and syntax checks; the native Desktop application itself was not launched.
 
@@ -108,4 +107,8 @@ target harness; those runtime-version dependencies are documented in
 [runtime integration](runtime-integration.md). A passing admission check does not remove
 that warning or establish public catalog acceptance.
 
-Only a new Cornell Enterprise branch is intended for publication. No public catalog PR, marketplace submission or hackathon announcement is part of this change.
+## Release verification
+
+On 2026-11-11 the offline suite was rerun: **294 tests, 280 passed, 14 skipped**.
+Ruff, JavaScript syntax checks for the web tab, workbench and Desktop entrypoint,
+and Git whitespace validation passed. These checks used no paid model calls.
