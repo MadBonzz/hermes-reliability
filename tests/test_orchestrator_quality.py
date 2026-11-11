@@ -14,6 +14,8 @@ from src.orchestrator.quality import (
     check_catalog,
     validate_assessments,
     validate_design,
+    validate_proposal,
+    validate_review,
     validate_stopping,
 )
 from src.orchestrator.runner import CampaignPreempted, Evidence, check_stop, exchange
@@ -22,6 +24,48 @@ from tests.test_orchestrator import ROOT, case
 
 
 class QualityTests(unittest.TestCase):
+    def test_malformed_proposals_repair_without_losing_inspected_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            path = source / "agent.py"
+            path.write_text("def answer(): return 4\n")
+            evidence = Evidence(lambda value: value)
+            ref = evidence.read({"id": evidence.add(path)})["ref"]
+            valid = {"ready": True, "rationale": [{"id": "task_a", "architecture_refs": [ref]}]}
+            for row in (None, "task_a", {"id": {}}, {"id": "task_a", "architecture_refs": [{"ref": ref}]}):
+                with self.subTest(row=row):
+                    replies = iter([{"ready": True, "rationale": [row]}, valid])
+                    messages = []
+                    result = exchange(
+                        SimpleNamespace(ask=lambda _: next(replies)), evidence, {},
+                        conversation=messages,
+                        response_validator=lambda value: validate_proposal(value, evidence, source),
+                    )
+                    self.assertEqual(result, valid)
+                    self.assertIn(ref, evidence.seen)
+                    self.assertEqual(len(messages), 5)
+                    self.assertNotIn("unhashable", messages[-2]["content"])
+
+    def test_malformed_review_issues_repair_before_acceptance(self):
+        valid = {"accepted": True, "issues": []}
+        for issue in (
+            None,
+            {"id": 3, "description": "test"},
+            {"id": "task_quality-1", "description": {}, "scenario_ids": []},
+            {"id": "task_quality-1", "description": "test", "scenario_ids": [{"id": "task_a"}]},
+        ):
+            with self.subTest(issue=issue):
+                replies = iter([{"accepted": False, "issues": [issue]}, valid])
+                messages = []
+                result = exchange(
+                    SimpleNamespace(ask=lambda _: next(replies)), Evidence(lambda value: value), {},
+                    conversation=messages,
+                    response_validator=lambda value: validate_review(value, "task_quality", [case()]),
+                )
+                self.assertEqual(result, valid)
+                self.assertEqual(len(messages), 5)
+                self.assertNotIn("unhashable", messages[-2]["content"])
+
     def test_evidence_accepts_returned_citations_without_bypassing_integrity(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "evidence.txt"

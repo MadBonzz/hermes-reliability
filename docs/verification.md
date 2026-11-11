@@ -126,3 +126,41 @@ Catalog admission was also checked against Hermes upstream commit
   compatibility review; a local pass is not catalog acceptance.
 
 The dashboard screenshot shows the deterministic regression test described above.
+
+## Final submission audit: 2026-11-11
+
+A fresh Hermes profile installed the public repository at
+`dd2fd0580b0c25292edf97460ffe851e7838a101` using the documented Git-URL install
+flow. Installation, enabling, Plugin Doctor, and all 16 admission checks passed
+against Hermes `77e16d5f0f69328003adc3dd91e5f36823df982e`.
+
+- Chromium loaded the installed plugin through the real Hermes ASGI backend and
+  the SDK test shell. Authentication, rejected credential-bearing repository URLs,
+  execution opt-in, and saved campaign rendering passed without JavaScript exceptions.
+- Native deterministic regression testing again froze an audited benchmark and
+  correctly reported two regressed phases. The native memory tool saved the
+  baseline reference, and a fresh Hermes session received both IDs.
+- A response-handling audit reproduced crashes on null rationale rows and
+  non-string review issue IDs, plus unhelpful errors on object-shaped citations.
+  These now produce actionable validation feedback inside the existing repair loop.
+  The updated suite has **296 tests: 282 passed, 14 skipped**. Ruff and admission
+  checks pass. The existing target-runtime private-import warning remains.
+
+The live orchestration check used **Muse Spark 1.3 Contributor through Hermes's
+native CLI worker and `ctx.llm`**, with real AssistantBench and WebLINX retrieval.
+It was bounded to one scenario, one execution round, up to three generation/review
+passes, and a shared 24-request Muse ceiling. The first attempt used 13 requests
+on inspection and hit the test relay's cumulative input limit. One additional
+request belonged to an operator-stopped test-relay restart. A focused retry used
+the remaining 10 requests, authored a scenario, submitted its proposal, and passed
+schema, Python syntax, and native preflight validation. The shared request ceiling
+then blocked the first reviewer call. No reviewer verdict or target execution was
+completed, and no autonomous end-to-end success is claimed. All 24 dispatched
+provider requests returned HTTP 200 with `finish_reason=stop`; the stopping limits
+were local test-budget guards, not provider rejection or output truncation.
+
+The focused retry is a functional generation/preflight result, not a scenario
+difficulty or reliability benchmark. The live check used the published revision
+above; the malformed-response fixes were separately verified by repair-loop tests.
+Fully autonomous live campaigns, native Desktop rendering, Windows behavior and
+live OpenHands/DeerFlow execution remain outside the verified results here.

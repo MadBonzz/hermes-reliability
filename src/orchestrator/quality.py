@@ -178,11 +178,18 @@ def validate_review(review, role, cases, oracle_validation=None):
     for issue in review["issues"]:
         if (
             not isinstance(issue, dict)
-            or not issue.get("description")
-            or not issue.get("id", "").startswith(role + "-")
+            or not isinstance(issue.get("description"), str)
+            or not issue["description"].strip()
+            or not isinstance(issue.get("id"), str)
+            or not issue["id"].startswith(role + "-")
         ):
             raise ValueError("Review issues need stable role-prefixed IDs and descriptions")
-        if issue["id"] in seen or not set(issue.get("scenario_ids", [])) <= ids:
+        scenario_ids = issue.get("scenario_ids", [])
+        if not isinstance(scenario_ids, list) or any(
+            not isinstance(identity, str) for identity in scenario_ids
+        ):
+            raise ValueError("Review issue scenario_ids must be a list of string scenario IDs")
+        if issue["id"] in seen or not set(scenario_ids) <= ids:
             raise ValueError("Duplicate issue ID or unknown scenario")
         seen.add(issue["id"])
     if review["accepted"] and review["issues"]:
@@ -206,7 +213,14 @@ def validate_proposal(plan, evidence, source):
         if Path(evidence.items[ref.split(":")[0]]["path"]).is_relative_to(source)
     }
     for row in plan["rationale"]:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"].strip():
+            raise ValueError("Each rationale entry must be an object with a nonempty string id")
         refs = row.get("architecture_refs", [])
+        if not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs):
+            raise ValueError(
+                "architecture_refs must be a list of exact citation strings returned by source reads, "
+                "not citation objects or file paths"
+            )
         if not refs or not set(refs) <= evidence.seen or not set(refs).intersection(source_refs):
             raise ValueError(
                 f"Use exact inspected source refs. Available refs: {sorted(source_refs)}"
