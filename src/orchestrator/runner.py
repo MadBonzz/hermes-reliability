@@ -19,7 +19,6 @@ from ..evaluation.differential import compare as differential_compare
 from ..evaluation.differential import markdown as differential_markdown
 from ..evaluation.evaluation_metrics import api_metrics
 from ..evaluation.runtime_support import read_jsonl, sha256_file, write_json_atomic
-from ..evaluation.utils import load_eval_config
 from .adapters import ROOT, make_adapter, revision_hashes
 from .datasets import (
     discover,
@@ -1006,7 +1005,7 @@ def run(
     output = experiment / "attempts" / attempt
     output.mkdir(parents=True)
     # Plugin callers supply only host-scoped secrets; never read profile files.
-    values = load_eval_config(ROOT / ".env") if credential_values is None else credential_values
+    values = {} if credential_values is None else credential_values
     orch_key = values.get(config["orchestrator"].get("api_key_env", ""), "")
     target_key = values.get(config["target"].get("api_key_env", ""), "")
     dataset_key = values.get(config.get("dataset_discovery", {}).get("api_key_env", "HF_TOKEN"), "")
@@ -1098,6 +1097,7 @@ def run(
                     "target": config["target"],
                 }
             )
+            base_adapter.target_api_key = target_key
         resumed = review_recovery(config, evidence)
         recovery = initial_recovery(config, evidence) if not resumed else None
         source_id = (
@@ -1158,6 +1158,7 @@ def run(
                 "target": config["target"],
             }
         )
+        adapter.target_api_key = target_key
         workspace.runtime_kind = (
             config["adapter"].get("kind")
             if config["adapter"].get("kind") in {"openhands", "deerflow", "custom"}

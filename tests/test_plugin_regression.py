@@ -16,11 +16,12 @@ from src.plugin.integration import register
 from src.plugin.regression import run_fixed
 from src.plugin.service import Service
 from tests.helpers import TemporaryDirectoryTestCase
+from tests.host_safety import HostSafetyMixin
 from tests.test_orchestrator import ROOT, case
 from tests.test_version_regression import report
 
 
-class RegressionTests(TemporaryDirectoryTestCase):
+class RegressionTests(HostSafetyMixin, TemporaryDirectoryTestCase):
     def setUp(self):
         super().setUp()
         self.source = self.root / "source"

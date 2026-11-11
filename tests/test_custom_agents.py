@@ -17,11 +17,12 @@ from src.orchestrator.workspace import Workspace
 from src.plugin import source as app
 from src.plugin.service import Service
 from tests.helpers import TemporaryDirectoryTestCase
+from tests.host_safety import HostSafetyMixin
 from tests.test_dataset_discovery import catalogue_response
 from tests.test_orchestrator import ROOT, case
 
 
-class CustomAgentTests(TemporaryDirectoryTestCase):
+class CustomAgentTests(HostSafetyMixin, TemporaryDirectoryTestCase):
     def test_native_source_only_design_does_not_inspect_docker(self):
         for kind in ("openhands", "deerflow"):
             with (

@@ -64,7 +64,7 @@ def hermes_run_environment(home):
             os.environ["HERMES_HOME"] = previous
 
 
-def load_eval_config(env_path=None):
+def load_eval_config():
     """Target-worker compatibility: environment only; Hermes owns secret files."""
     config = dict(os.environ)
     for legacy, generic in (("LM_STUDIO_URL", "EVAL_BASE_URL"), ("LM_STUDIO_API_KEY", "EVAL_API_KEY")):

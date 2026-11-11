@@ -1,5 +1,7 @@
 # Verification of the plugin branch
 
+For the November 11 security changes and their targeted, native-runtime and live Muse checks, see [catalog review verification](catalog-review-verification.md).
+
 Verified on 2026-11-08 with Python 3.14.9 and Hermes source commit
 `acdc8f1ba65c0231ae8277e846a4d55928913991`.
 

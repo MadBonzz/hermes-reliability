@@ -32,7 +32,7 @@ def main():
         args.scenarios or root / "scenarios", args.schema or root / "scenario.schema.json"
     )
     with utils.hermes_run_environment(target / "home"):
-        utils.load_hermes(utils.load_eval_config(root / ".env").get("HERMES_AGENT_ROOT"))
+        utils.load_hermes(utils.load_eval_config().get("HERMES_AGENT_ROOT"))
 
         def agent(*args):
             tools = utils.model_tools.get_tool_definitions(

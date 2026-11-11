@@ -3,8 +3,10 @@
 import json
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ..orchestrator.source import is_git, snapshot_directory
+from .source_policy import host_read_allowed, local_source
 
 REPOSITORIES = {
     "hermes": "https://github.com/NousResearch/hermes-agent.git",
@@ -24,7 +26,10 @@ def resolve_source(config, folder):
     location = config.pop("source_input")
     requested = config.pop("requested_revision", "")
     destination = folder / "agent_source"
-    local = Path(location).is_dir()
+    local = urlsplit(location).scheme != "https"
+    if local:
+        # Recheck in the owning worker profile, before Git or snapshot reads.
+        location = str(local_source(location))
     if local and (
         not is_git(location) or (config["adapter"]["kind"] == "custom" and not requested)
     ):
@@ -32,7 +37,7 @@ def resolve_source(config, folder):
             raise ValueError("Revision selection requires a Git repository")
         if config.get("execute") and config["adapter"]["kind"] != "custom":
             raise ValueError("Built-in execution requires a pinned Git checkout")
-        config["source"] = snapshot_directory(location, destination)
+        config["source"] = snapshot_directory(location, destination, read_guard=host_read_allowed)
         previous = config.pop("previous_source", None)
         if previous and previous["repository"] != config["source"]["repository"]:
             raise ValueError("Saved tests belong to a different source directory")

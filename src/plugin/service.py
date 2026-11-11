@@ -20,6 +20,7 @@ from .history import History
 from .regression import run_fixed
 from .snapshot import ROOT, freeze, service_class, verify
 from .source import REPOSITORIES, resolve_source
+from .source_policy import local_source
 
 PLUGIN_ID = "hermes-reliability"
 ALLOWED_REQUEST = {
@@ -88,12 +89,15 @@ class Service:
             )
         source = str(request.get("source", "")).strip()
         url = urlsplit(source)
-        local = Path(source).expanduser().is_dir() if source else False
         if (
             not source
             or source.startswith("-")
-            or (not local and (url.scheme != "https" or not url.hostname))
         ):
+            raise ValueError("Provide an existing local directory or HTTPS Git repository")
+        local = url.scheme != "https"
+        if local:
+            source = str(local_source(source))
+        elif not url.hostname:
             raise ValueError("Provide an existing local directory or HTTPS Git repository")
         if not local and (url.username or url.password or url.query or url.fragment):
             raise ValueError(

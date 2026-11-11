@@ -217,7 +217,7 @@ def check_python_environments(temporary_root):
 
 
 def run_checks(temporary_root):
-    config = utils.load_eval_config(utils.PROJECT_ROOT / ".env")
+    config = utils.load_eval_config()
     utils.load_hermes(config.get("HERMES_AGENT_ROOT"))
     check_python_environments(temporary_root)
     original = dict(utils.registry._tools)

@@ -202,7 +202,7 @@ def run_case(spec, config, key, *, launch=run_phase, order_seed=0):
 
 
 def parse_args(argv=None):
-    config = load_eval_config(ROOT / ".env")
+    config = load_eval_config()
     parser = argparse.ArgumentParser(
         description="Run property-oriented agent evaluations and controlled conditions."
     )

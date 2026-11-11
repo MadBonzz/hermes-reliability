@@ -13,7 +13,6 @@ from jsonschema import Draft7Validator, ValidationError
 
 from ..evaluation.api_trace import SecretRedactor
 from ..evaluation.runtime_support import write_json_atomic
-from ..evaluation.utils import load_eval_config
 from .dashboard import read_json
 from .prompts import DASHBOARD_FINDINGS_PROMPT, DASHBOARD_FINDINGS_REPAIR
 
@@ -193,7 +192,7 @@ def generate(directory, environment, client_factory=None):
         }
         write_json_atomic(folder / "status.json", state)
         try:
-            if not key:
+            if not key and client_factory is None:
                 raise ValueError(
                     f"Set {config.get('api_key_env', 'the campaign API key')} to prepare findings"
                 )
@@ -267,8 +266,12 @@ def generate(directory, environment, client_factory=None):
 class FindingsWorker:
     """Prepare each retained round once, including analyses from already-running controllers."""
 
-    def __init__(self, catalog, env_path):
-        self.catalog, self.env_path = catalog, env_path
+    def __init__(self, catalog, *, credential_values, client_factory):
+        self.catalog = catalog
+        # Capture the owning profile's explicit values/client before the thread
+        # starts. Background work must not consult the launch profile's environ.
+        self.credential_values = dict(credential_values)
+        self.client_factory = client_factory
         self.stop = threading.Event()
         self.thread = threading.Thread(target=self.run, name="dashboard-findings", daemon=True)
 
@@ -282,7 +285,7 @@ class FindingsWorker:
                     for analysis in sorted(path.glob("round_*/analysis.json"), reverse=True):
                         if self.stop.is_set():
                             return
-                        generate(analysis.parent, load_eval_config(self.env_path))
+                        generate(analysis.parent, self.credential_values, self.client_factory)
             except (OSError, ValueError) as exc:
                 # Keep polling when a live file is replaced while discovering campaigns.
                 print(f"Findings discovery will retry: {type(exc).__name__}", flush=True)

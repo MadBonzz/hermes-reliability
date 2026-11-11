@@ -22,12 +22,42 @@ EXCLUDED = {
     ".ssh",
     ".codex",
     ".agents",
+    ".config",
+    ".gnupg",
+    ".docker",
+    ".kube",
+    ".azure",
+    ".mozilla",
+    "browser-profile",
+    "browser-profiles",
+    "user data",
+    "google-chrome",
+    "chrome",
+    "chromium",
+    "firefox",
+    "brave-browser",
+    "microsoft edge",
+    "edge",
+    "opera",
+    "vivaldi",
+    "tor browser",
+    "safari",
+    "auth.json",
+    "auth.lock",
+    "config.yaml",
+    "config.yml",
+    ".netrc",
+    "_netrc",
+    ".git-credentials",
+    ".pgpass",
+    ".npmrc",
+    ".pypirc",
 }
 
 
 def permitted(path):
-    return not any(part in EXCLUDED for part in path.parts) and not (
-        path.name.startswith(".env") or path.suffix.lower() in {".pem", ".key", ".p12"}
+    return not any(part.lower() in EXCLUDED for part in path.parts) and not (
+        path.name.lower().startswith(".env") or path.suffix.lower() in {".pem", ".key", ".p12"}
     )
 
 
@@ -41,9 +71,11 @@ def is_git(root):
     return result.returncode == 0 and Path(result.stdout.strip()).resolve() == Path(root).resolve()
 
 
-def source_files(root, *, tracked=True):
+def source_files(root, *, tracked=True, read_guard=None):
     """Tracked Git files, or regular local files; never follow linked directories."""
     root = Path(root).resolve()
+    if read_guard and not read_guard(root):
+        raise ValueError("Source directory is blocked by the host read guard")
     if tracked and is_git(root):
         names = (
             subprocess.check_output(["git", "-C", str(root), "ls-files", "-z"], text=True)
@@ -56,7 +88,7 @@ def source_files(root, *, tracked=True):
         while pending:
             for path in sorted(pending.pop().iterdir()):
                 relative = path.relative_to(root)
-                if not permitted(relative) or path.is_symlink():
+                if not permitted(relative) or path.is_symlink() or (read_guard and not read_guard(path)):
                     continue
                 if path.is_dir():
                     pending.append(path)
@@ -70,6 +102,8 @@ def source_files(root, *, tracked=True):
         and (root / name).is_file()
         and not (root / name).is_symlink()
         and (root / name).resolve().is_relative_to(root)
+        and permitted((root / name).resolve().relative_to(root))
+        and (not read_guard or read_guard(root / name))
     )
 
 
@@ -87,12 +121,12 @@ def read_source(root, name):
     return path
 
 
-def snapshot_directory(location, destination):
+def snapshot_directory(location, destination, *, read_guard=None):
     """Copy code without mutating the input; record exact content provenance."""
     root, destination = Path(location).resolve(), Path(destination).resolve()
     if destination.is_relative_to(root):
         raise ValueError("Source snapshot destination must be outside the input directory")
-    files = source_files(root, tracked=False)
+    files = source_files(root, tracked=False, read_guard=read_guard)
     if not files:
         raise ValueError("Local source directory contains no eligible files")
     if len(files) > 20000 or sum((root / name).stat().st_size for name in files) > 100_000_000:
@@ -101,6 +135,8 @@ def snapshot_directory(location, destination):
     hashes = {}
     for name in files:
         source = root / name
+        if read_guard and not read_guard(source):
+            raise ValueError("Source read policy changed during snapshot")
         before = sha256_file(source)
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True)

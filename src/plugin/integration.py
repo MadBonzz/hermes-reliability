@@ -2,6 +2,8 @@
 
 import json
 
+from .source_policy import approval_source_key
+
 DESCRIPTION = "Run source-grounded reliability campaigns: discover datasets, generate scenarios, independently review, optionally execute, and retain evidence."
 SCHEMAS = {
     "reliability_start": {
@@ -140,7 +142,7 @@ def register(ctx):
             return {
                 "action": "approve",
                 "message": "Run the configured target and generated evaluator code? This uses the target model account and may execute code on this machine.",
-                "rule_key": "hermes-reliability.execute",
+                "rule_key": approval_source_key(args),
             }
         return None
 

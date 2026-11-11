@@ -11,10 +11,11 @@ from src.orchestrator.runner import run
 from src.orchestrator.workspace import Workspace
 from src.plugin import source as app
 from tests.helpers import TemporaryDirectoryTestCase
+from tests.host_safety import HostSafetyMixin
 from tests.test_orchestrator import ROOT, case
 
 
-class DashboardTests(TemporaryDirectoryTestCase):
+class DashboardTests(HostSafetyMixin, TemporaryDirectoryTestCase):
     def test_local_campaign_replaces_its_bundled_copy_in_sidebar(self):
         path = self.campaign()
         row = Catalog(self.root).cards()[0]

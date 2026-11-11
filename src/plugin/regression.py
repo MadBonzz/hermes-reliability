@@ -79,6 +79,7 @@ def run_fixed(config, history, *, on_created, credential_values, adapter_factory
                 "design_only": False,
             }
         )
+        adapter.target_api_key = credential_values.get("RELIABILITY_TARGET_API_KEY", "")
         adapter.schema_path = frozen / "scenario.schema.json"
         adapter.schema = json.loads(adapter.schema_path.read_text())
         record = {"round": 1, "generations": [], "executions": {}}

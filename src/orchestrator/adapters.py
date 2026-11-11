@@ -4,12 +4,12 @@ Adapters are trusted local configuration, never model-authored executable code.
 """
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
 import jsonschema
 
+from ..evaluation.child_environment import child_environment
 from ..evaluation.runtime_support import sha256_file
 from ..evaluation.scenario_validation import external_schema_ref, reference_tool_names
 
@@ -29,6 +29,7 @@ class HermesAdapter:
 
     def __init__(self, config):
         self.config = config
+        self.target_api_key = ""
         self.schema_path = ROOT / "scenario.schema.json"
         self.schema = json.loads(self.schema_path.read_text(encoding="utf-8"))
         if external_schema_ref(self.schema):
@@ -48,7 +49,7 @@ class HermesAdapter:
         ]
 
     def validation_environment(self):
-        return os.environ.copy()
+        return child_environment()
 
     def preflight(self, evaluator, output):
         """Run copied validation, authored prerequisites and local evaluator tests."""
@@ -116,17 +117,14 @@ class HermesAdapter:
 
     def execute_revision(self, evaluator, output, target, key):
         evaluator, output = Path(evaluator).resolve(), Path(output).resolve()
+        self.target_api_key = key
         validation = self.preflight(evaluator, output.parent / "preflight")
         if not validation["passed"]:
             return {"status": "invalid_evaluator", "validation": validation}
         before = revision_hashes(evaluator)
         command = self.execution_command(evaluator, output, target)
         # Provider credentials are delivered only to target execution, never to editing/review tools.
-        env = {
-            k: v
-            for k, v in os.environ.items()
-            if not any(s in k.upper() for s in ("API_KEY", "META_KEY", "COHERE_KEY", "TOKEN"))
-        }
+        env = child_environment()
         env.update(EVAL_API_KEY=key, EVAL_MODEL=target["model"], EVAL_BASE_URL=target["base_url"])
         with (output.parent / "execution.log").open("w", encoding="utf-8") as log:
             try:
@@ -314,13 +312,8 @@ class ContainerAdapter(HermesAdapter):
         ]
 
     def validation_environment(self):
-        from ..evaluation.utils import load_eval_config
-
-        environment = {
-            k: v for k, v in os.environ.items() if not any(s in k.upper() for s in ("KEY", "TOKEN"))
-        }
-        key_name = self.config["target"]["api_key_env"]
-        environment["TASK_API_KEY"] = load_eval_config(ROOT / ".env")[key_name]
+        environment = child_environment()
+        environment["TASK_API_KEY"] = self.target_api_key
         return environment
 
     def execution_command(self, evaluator, output, target):

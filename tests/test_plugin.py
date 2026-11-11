@@ -17,6 +17,7 @@ from src.plugin.integration import register
 from src.plugin.service import Service
 from src.plugin.snapshot import verify
 from tests.helpers import TemporaryDirectoryTestCase
+from tests.host_safety import HostSafetyMixin
 from tests.test_orchestrator import ROOT, case
 
 
@@ -79,7 +80,7 @@ class FixtureLlm:
         )
 
 
-class PluginTests(TemporaryDirectoryTestCase):
+class PluginTests(HostSafetyMixin, TemporaryDirectoryTestCase):
     def source(self):
         source = self.root / "agent"
         source.mkdir()
@@ -118,7 +119,7 @@ class PluginTests(TemporaryDirectoryTestCase):
         )
         hook = ctx.register_hook.call_args.args[1]
         self.assertIsNone(hook("reliability_start", {"source": "/example"}))
-        self.assertEqual("approve", hook("reliability_start", {"execute": True})["action"])
+        self.assertEqual("approve", hook("reliability_start", {"source": "https://example.com/a", "execute": True})["action"])
         self.assertEqual("reliability", ctx.register_cli_command.call_args.args[0])
 
     def test_synthetic_plugin_namespace_does_not_replace_global_src(self):
@@ -154,7 +155,7 @@ class PluginTests(TemporaryDirectoryTestCase):
         env_file = self.root / ".env"
         env_file.write_text("EVAL_API_KEY=must-not-load\n")
         with patch.dict("os.environ", {"EVAL_MODEL": "explicit"}, clear=True):
-            self.assertEqual({"EVAL_MODEL": "explicit"}, load_eval_config(env_file))
+            self.assertEqual({"EVAL_MODEL": "explicit"}, load_eval_config())
 
     def test_invalid_repository_urls_and_budgets_fail_before_job_creation(self):
         service = self.service()
@@ -225,7 +226,7 @@ class PluginTests(TemporaryDirectoryTestCase):
         with (
             self.secret_scope(),
             patch(
-                "src.orchestrator.runner.load_eval_config",
+                "src.evaluation.utils.load_eval_config",
                 side_effect=AssertionError("host must own credentials"),
             ),
         ):
