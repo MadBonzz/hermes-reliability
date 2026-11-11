@@ -112,3 +112,17 @@ that warning or establish public catalog acceptance.
 On 2026-11-11 the offline suite was rerun: **294 tests, 280 passed, 14 skipped**.
 Ruff, JavaScript syntax checks for the web tab, workbench and Desktop entrypoint,
 and Git whitespace validation passed. These checks used no paid model calls.
+
+Catalog admission was also checked against Hermes upstream commit
+`77e16d5f0f69328003adc3dd91e5f36823df982e` using an isolated runtime and profile:
+
+- `hermes plugins validate /path/to/plugin --install-deps --json`: all 16 checks
+  passed, including dependency preparation, capability declarations, install
+  security scan, core-override checks and Desktop SDK checks.
+- `hermes plugins doctor /path/to/plugin --ci`: discovery, imports and
+  registration passed; eight tools and one hook registered.
+- The validator reported the documented private-runtime-import warning for the
+  separate target evaluation harness. This warning remains subject to maintainer
+  compatibility review; a local pass is not catalog acceptance.
+
+The dashboard screenshot shows the deterministic regression test described above.
