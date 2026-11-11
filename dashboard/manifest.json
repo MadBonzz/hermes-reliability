@@ -1,0 +1,1 @@
+{"name":"hermes-reliability","label":"Reliability Lab","description":"Campaigns, dataset provenance, reviews and execution evidence.","icon":"FlaskConical","version":"0.1.0","tab":{"path":"/reliability","position":"after:skills"},"entry":"index.js","api":"plugin_api.py"}

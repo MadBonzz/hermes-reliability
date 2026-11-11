@@ -1,0 +1,59 @@
+# Local configuration (may contain credentials).
+.env
+.env.*
+
+# Local evaluation evidence: reports, traces, correlated requests, diagnostics,
+# and retained task workspaces. Generated suites belong to private campaigns.
+/eval_harness/
+
+# Verified local archives of retired benchmarks and private run evidence.
+/archives/
+
+# Common alternative destinations for --output or historical log exports.
+/results/
+/workspaces/
+/eval_workspace/
+/traces/
+/logs/
+/matched_requests/
+/eval_report.json
+/v2_runs/
+/runs/
+/orchestrator_runs/
+/reference_validation/
+/diagnostics/
+/attribution/
+/analysis/
+/analyses/
+/analysis.md
+/analysis_*.md
+/*_analysis.md
+/*_transcripts.md
+/HERMES_BUG_BACKLOG.md
+/orchestrator.json
+/prices.json
+*.log
+*.jpg
+*.jpeg
+
+# Python runtime artifacts.
+__pycache__/
+*.py[cod]
+.venv/
+.uv-cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Test/coverage output and operating-system metadata.
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.DS_Store
+Thumbs.db
+
+# Optional local plugin development state. Production state is in Hermes home.
+/plugin-data/

@@ -1,0 +1,82 @@
+{
+  "name": "hermes-reliability",
+  "label": "Reliability Lab",
+  "version": "0.2.0",
+  "description": "Evidence-based reliability testing: architecture-aware scenarios, real usage datasets, independent reviews, execution and a campaign dashboard.",
+  "author": "Shourya Jain",
+  "kind": "standalone",
+  "manifest_version": 2,
+  "api_version": 1,
+  "requires_hermes": ">=0.21.5",
+  "homepage": "https://github.com/MadBonzz/hermes-reliability",
+  "tags": [
+    "evaluation",
+    "reliability",
+    "testing",
+    "dashboard"
+  ],
+  "provides_tools": [
+    "reliability_start",
+    "reliability_status",
+    "reliability_stop",
+    "reliability_evidence",
+    "reliability_history",
+    "reliability_freeze",
+    "reliability_compare",
+    "reliability_memory"
+  ],
+  "provides_hooks": [
+    "pre_tool_call"
+  ],
+  "python_dependencies": [
+    "httpx>=0.28.1,<0.29",
+    "jsonschema>=4.18,<5",
+    "fastapi>=0.104,<1"
+  ],
+  "requires_env": [
+    {
+      "name": "HF_TOKEN",
+      "secret": true,
+      "description": "Optional: gated Hugging Face datasets. Leave blank for public dataset discovery."
+    },
+    {
+      "name": "RELIABILITY_TARGET_API_KEY",
+      "secret": true,
+      "description": "Optional for design. Used only by a separately configured execution target; not the orchestration model."
+    }
+  ],
+  "config_schema": {
+    "execution_enabled": {
+      "type": "bool",
+      "default": false,
+      "description": "Permit explicit execution requests. Generated evaluator code runs on this host; configure trusted runtimes first."
+    },
+    "runtimes": {
+      "type": "dict",
+      "default": {},
+      "description": "Operator-owned runtime options keyed by hermes, openhands, deerflow or custom. Python path, pinned container image, or trusted custom adapter factory."
+    },
+    "target": {
+      "type": "dict",
+      "default": {},
+      "description": "Execution target model and base_url. Credentials come from RELIABILITY_TARGET_API_KEY through Hermes."
+    },
+    "requests": {
+      "type": "int",
+      "default": 100,
+      "description": "Total orchestration model request budget (1\u2013500)."
+    },
+    "timeout_seconds": {
+      "type": "int",
+      "default": 180,
+      "description": "Timeout per orchestration model call (10\u2013600 seconds)."
+    },
+    "dataset_discovery": {
+      "type": "dict",
+      "default": {
+        "enabled": true
+      },
+      "description": "Dataset discovery settings; public HF and Zenodo search needs no paid search API."
+    }
+  }
+}
